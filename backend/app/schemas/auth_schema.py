@@ -57,7 +57,12 @@ class GoogleLoginIn(Schema):
     token: str
 
 
+class TokenOut(Schema):
+    access_token: str
+    refresh_token: str
+
 class UserOut(Schema):
     id: str
     email: Optional[str] = None 
     phone: Optional[str] = None
+    token: Optional[TokenOut] = None

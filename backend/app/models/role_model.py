@@ -4,7 +4,7 @@ from .unmanaged_meta import UnmanagedMeta
 import uuid
 
 class Role(TimeStampedModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4 )
+    id   = models.UUIDField(primary_key=True, default=uuid.uuid4 )
     code = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
     

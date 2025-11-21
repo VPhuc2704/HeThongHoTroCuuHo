@@ -3,7 +3,7 @@
 import os
 import sys
 from app.config.db_connect import check_db_connection
-from django.core.management import call_command
+
 
 
 def main():
@@ -21,7 +21,7 @@ def main():
     try:
         ok = check_db_connection()
         if not ok:
-            raise SystemExit("Không thể kết nối DB, dừng ứng dụng.")
+            print("DB chưa kết nối, nhưng tiếp tục debug...")
     except Exception as e:
         print("Lỗi khi kiểm tra DB:", e)
         raise

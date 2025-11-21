@@ -18,6 +18,8 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+load_dotenv()
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
@@ -77,7 +79,7 @@ WSGI_APPLICATION = 'app.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-load_dotenv() 
+
 
 DATABASES = {
     'default': {
@@ -151,11 +153,19 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': True,
         },
-        'django.db.backends': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
-            'propagate': False,
-        },
+        # 'django.db.backends': {
+        #     'handlers': ['console'],
+        #     'level': 'DEBUG',
+        #     'propagate': False,
+        # },
     },
 }
+
+
+from typing import Final
+
+JWT_SECRET: Final[str] = os.getenv('JWT_SECRET', 'change-me')
+JWT_ALGORITHM: Final[str] = os.getenv('JWT_ALGORITHM', 'HS256')
+ACCESS_EXPIRE_MINUTES: Final[int] = int(os.getenv('ACCESS_EXPIRE_MINUTES', '60'))
+REFRESH_EXP_DAYS: Final[int] = int(os.getenv('REFRESH_EXPIRE_DAYS', '7'))
 

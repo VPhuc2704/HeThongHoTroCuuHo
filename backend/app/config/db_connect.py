@@ -12,7 +12,6 @@ def check_db_connection() -> bool:
         from django.db.utils import OperationalError
 
         conn = connections['default']
-        # ensure_connection() sẽ raise OperationalError nếu không kết nối được
         conn.ensure_connection()
         print("Kết nối DB thành công")
         return True
@@ -22,4 +21,3 @@ def check_db_connection() -> bool:
     except Exception as e:
         print("Kết nối DB thất bại (khác):", e)
         return False
-# ...existing code...
