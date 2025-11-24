@@ -1,8 +1,6 @@
 from app.main import api
-
 from app.schemas.auth_schema import RegisterSchema, LoginSchema, UserOut
 from app.services import IAuthService, AuthService
-
 from app.security.jwt_bearer import JWTBearer
 from app.security.permissions import require_role
 from app.enum.role_enum import RoleCode
@@ -62,21 +60,6 @@ def login(request, data: LoginSchema):
         max_age=24 * 3600 * settings.REFRESH_EXP_DAYS,
     )
     return response
-
-    # return {
-    #     "status": "success",
-    #     "data": {
-    #         "user": {
-    #             "id": str(user.id),
-    #             "email": user.email,
-    #             "phone": user.phone,
-    #         },
-    #         "token": {
-    #             "access": token,
-    #             "type": "Bearer"
-    #         }
-    #     }
-    # }
 
 @api.get("/api/admin/dashboards", auth=auth_bearer)
 @require_role(RoleCode.CITIZEN)

@@ -1,7 +1,9 @@
 from ninja.errors import HttpError
+from functools import wraps
 
 def require_role(*allowed_roles):
     def decorator(func):
+        @wraps(func)
         def wrapper(request, *args, **kwargs):
             user = getattr(request, "user", None)
             if not user:

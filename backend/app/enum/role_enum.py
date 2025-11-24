@@ -1,6 +1,6 @@
 from enum import Enum
 
-class RoleCode(Enum):
+class RoleCode(str, Enum):
     CITIZEN = "CITIZEN"
     RESCUER = "RESCUER"
     ADMIN = "ADMIN"

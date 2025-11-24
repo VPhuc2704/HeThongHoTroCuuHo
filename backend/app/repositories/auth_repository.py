@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from app.models import Account, Role
-from typing import Optional
+from typing import Optional, List
 from django.db.models import Q
 from django.db import connection
+from django.utils.dateparse import parse_datetime
 
 class IAccountRepo(ABC):
     @abstractmethod
@@ -27,6 +28,10 @@ class IAccountRepo(ABC):
     
     @abstractmethod
     def exits_by_phone(self, phone: str) -> bool:
+        pass
+
+    @abstractmethod
+    def get_all_accounts(self, *, limit: int, cursor: Optional[str]) -> List[Account]:
         pass
 
 
@@ -89,3 +94,10 @@ class AccountRepo(IAccountRepo):
 
     def get_by_id(self, account_id) -> Optional[Account]:
         return Account.objects.get(id=account_id)
+    
+
+    def get_all_accounts(self, *, limit: int, cursor: Optional[str]) -> List[Account]:
+        qs = Account.objects.select_related("role").order_by("-created_at")
+        if cursor:
+            qs = qs.filter(created_at__lt=parse_datetime(cursor))
+        return list(qs[:limit]) 

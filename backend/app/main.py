@@ -8,3 +8,4 @@ api = NinjaAPI(title="RescueVN API", version="1.0.0")
 global_exception_handlers(api)
 
 from app.views import auth_api
+from app.views import account_api
