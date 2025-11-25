@@ -29,25 +29,7 @@ def admin_create_account(request, data: AdminCreateAccountSchema):
         "data": account
     }
 
-
-# @api.get("/admin/accounts", auth=auth_bearer, response={200: PaginatedAccountsSchema})
-# @require_role(RoleCode.ADMIN)
-# def get_all_accounts(request, page: int = 1, page_size: int = 20):
-#     """
-#     Lấy tất cả account với pagination
-#     """
-#     accounts, total = account_service.get_accounts_paginated(page=page, page_size=page_size)
-
-#     return {
-#         "status": "success",
-#         "message": "Danh sách tài khoản",
-#         "total": total,
-#         "page": page,
-#         "page_size": page_size,
-#         "data": accounts
-#     }
-
-
-@api.get("/admin/accounts", response=AccountListResponse)
+@api.get("/admin/accounts", auth=auth_bearer, response=AccountListResponse)
+@require_role(RoleCode.ADMIN)
 def list_accounts(request, limit: int = 20, cursor: str = None):
     return account_service.get_list_accounts(limit=limit, cursor=cursor)
