@@ -68,3 +68,19 @@ class JwtProvider():
             raise InvalidToken("Token đã hết hạn")
         except jwt.InvalidTokenError:
             raise InvalidToken("Token không hợp lệ")
+        
+    @staticmethod
+    def get_user_from_jwt(request):
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return None
+
+        token = auth_header.split(" ")[1]
+        try:
+            payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+            user_id = payload.get("user_id")
+            if not user_id:
+                return None
+            return Account.objects.get(id=user_id)
+        except:
+            return None

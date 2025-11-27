@@ -9,3 +9,4 @@ global_exception_handlers(api)
 
 from app.views import auth_api
 from app.views import account_api
+from app.views import resuce_request_api
