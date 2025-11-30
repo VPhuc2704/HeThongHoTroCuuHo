@@ -1,3 +1,4 @@
+# from django.db import models
 from django.db import models
 from .base_model import TimeStampedModel
 from .account_model import Account
@@ -31,5 +32,6 @@ class RescueRequest(TimeStampedModel):
         db_table = "rescue_requests"
         indexes = [
             # models.Index(fields=["code"]),
-            models.Index(fields=["created_at"]),
+            models.Index(fields=["created_at"], name='idx_created_at_desc'),
+            models.Index(fields=["latitude", "longitude"], name='idx_lat_lng'),
         ]

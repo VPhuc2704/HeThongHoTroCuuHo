@@ -1,27 +1,11 @@
-from abc import ABC, abstractmethod
-from ..repositories import IRescueRequestRepo, RescueRequestRepo, ConditionTypeRepo
 from ..schemas.rescue_request_schema import RescueRequestSchema
-from ..models import RescueRequest
-from typing import Optional
+from ..models import RescueRequest, ConditionType
+from typing import Optional, List
 from ..models import Account
+from django.db import transaction
 
-class IRescueRequestService(ABC):
-    @abstractmethod
-    def create_request(self, 
-                       data: RescueRequestSchema, 
-                       account: Optional[Account] = None) -> RescueRequest:
-        """
-        Tạo một RescueRequest mới từ dữ liệu đã validate.
-        """
-        pass
-
-class RescueRequestService(IRescueRequestService):
-    def __init__(self, rescue_request_repo: IRescueRequestRepo = None):
-        self.rescue_request_repo = rescue_request_repo or RescueRequestRepo()
-
-    def create_request(self, 
-                       data: RescueRequestSchema, 
-                       account: Optional[Account] = None ) -> RescueRequest:
+class RescueRequestService():
+    def create_request(data: RescueRequestSchema, account: Optional[Account] = None ) -> RescueRequest:
 
         payload = data.model_dump()  # chuyển Schema sang dict
 
@@ -29,26 +13,64 @@ class RescueRequestService(IRescueRequestService):
             payload["account"] = account
 
         # Tạo request bằng repository
-        request = self.rescue_request_repo.create(**payload)
-        return request
+        # 2. Thực hiện Logic (có thể bọc trong transaction nếu cần ghi nhiều bảng)
+        with transaction.atomic():
+            # Gọi thẳng ORM của Django (Đây chính là Repository Pattern tích hợp sẵn)
+            instance_request = RescueRequest.objects.create(**payload)
+            
+            # --- Logic mở rộng ---
+            # Ví dụ: Gửi thông báo socket realtime cho admin
+            # notify_admin_new_request(instance)
+            return instance_request
+    
+    @staticmethod
+    def get_map_points(min_lat: float, max_lat: float, 
+                       min_lng: float, max_lng: float, 
+                       zoom: int):
+        """
+        Lấy danh sách điểm cứu hộ tối ưu theo khung nhìn và độ zoom.
+        """
+        # 1. Logic nghiệp vụ: Tính toán Limit dựa trên Zoom
+        limit = 500  # Mặc định (Zoom xa - Toàn quốc)
+        if zoom >= 14:       # Zoom rất gần (Cấp Phường/Xã)
+            limit = 5000     
+        elif zoom >= 10:     # Zoom vừa (Cấp Quận/Huyện)
+            limit = 2000
+            
+        # 2. Logic truy vấn: Tối ưu hoá SQL (Zero Loop)
+        qs = RescueRequest.objects.filter(
+            latitude__gte=min_lat, latitude__lte=max_lat,
+            longitude__gte=min_lng, longitude__lte=max_lng
+        ).values(
+            'id', 'latitude', 'longitude', 'status'
+        ).order_by('-created_at')[:limit]
+
+        # Trả về list dictionary
+        return list(qs)
+    
     
 
 
 class ConditionTypeService:
-    def __init__(self, repo: ConditionTypeRepo = None):
-        self.repo = repo or ConditionTypeRepo()
+    def create(self, name: str) -> ConditionType:
+        return ConditionType.objects.create(name=name)
     
-    def create(self, name: str):
-        return self.repo.create(name)
+    def get(self, id: str) -> Optional[ConditionType]:
+        return ConditionType.objects.filter(id=id).first()
     
-    def get(self, id: str):
-        return self.repo.get(id)
+    def list(self) -> List[ConditionType]:
+        return list(ConditionType.objects.all())
     
-    def list(self):
-        return self.repo.list()
+    def update(self, id: str, name: str) -> Optional[ConditionType]:
+        obj = self.get(id)
+        if obj:
+            obj.name = name
+            obj.save()
+        return obj
     
-    def update(self, id: str, name: str):
-        return self.repo.update(id, name)
-    
-    def delete(self, id: str):
-        return self.repo.delete(id)
+    def delete(self, id: str) -> bool:
+        obj = self.get(id)
+        if obj:
+            obj.delete()
+            return True
+        return False

@@ -41,7 +41,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
+    'channels',
     'app',
 ]
 
@@ -73,7 +73,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'app.wsgi.application'
+WSGI_APPLICATION = 'app.asgi.application'
 
 
 # Database
@@ -168,3 +168,10 @@ JWT_SECRET: Final[str] = os.getenv('JWT_SECRET', 'change-me')
 JWT_ALGORITHM: Final[str] = os.getenv('JWT_ALGORITHM', 'HS256')
 ACCESS_EXPIRE_MINUTES: Final[int] = int(os.getenv('ACCESS_EXPIRE_MINUTES', '60'))
 REFRESH_EXP_DAYS: Final[int] = int(os.getenv('REFRESH_EXPIRE_DAYS', '7'))
+
+# Cấu hình Channel Layer (Dùng bộ nhớ RAM để test cho nhanh)
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer"
+    }
+}

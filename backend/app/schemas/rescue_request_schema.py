@@ -3,6 +3,7 @@ from pydantic import Field,field_validator
 from ..enum.rescue_status import RescueStatus
 from typing import Optional, List
 from typing import Optional
+import uuid
 
 class RescueRequestSchema(Schema):
     name: str = Field(..., description="Tên người liên hệ")
@@ -40,6 +41,11 @@ class RescueRequestSchema(Schema):
             raise ValueError("Longitude phải nằm trong khoảng -180 đến 180")
         return v
 
+class RescueMapPoint(Schema):
+    id: uuid.UUID
+    latitude: float
+    longitude: float
+    status: str
 
 class ConditionTypeSchema(Schema):
     name: str
