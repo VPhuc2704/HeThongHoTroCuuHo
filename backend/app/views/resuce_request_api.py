@@ -1,8 +1,8 @@
 from ..main import api
-from app.schemas.rescue_request_schema import RescueRequestSchema, ConditionTypeOutSchema, ConditionTypeSchema, RescueMapPoint
+from app.schemas.rescue_request_schema import RescueRequestSchema, ConditionTypeOutSchema, ConditionTypeSchema, RescueMapPoint, PaginatedRescueResponse
 from app.services import RescueRequestService, ConditionTypeService
 from app.security.jwt_provider import JwtProvider
-from typing import List
+from typing import List, Optional
 from app.models import RescueRequest
 
 rescue_service = RescueRequestService()
@@ -33,6 +33,25 @@ def get_map_points(request,
     )
     
     return map_points
+
+
+@api.get("/requests", response=PaginatedRescueResponse)
+def list_rescue_requests(request, 
+                        page: int = 1, 
+                        page_size: int = 20, 
+                        status: Optional[str] = None, 
+                        search: Optional[str] = None):
+    """
+    API lấy danh sách cứu hộ dạng bảng.
+    - search: Tìm theo Tên, SĐT, Địa chỉ.
+    - status: Lọc theo trạng thái (PENDING, IN_PROGRESS...).
+    """
+    return RescueRequestService.get_list_requests_raw_sql(
+        page=page, 
+        size=page_size, 
+        status_filter=status, 
+        search=search
+    )
 
 
 @api.post("/condition", response=ConditionTypeOutSchema)

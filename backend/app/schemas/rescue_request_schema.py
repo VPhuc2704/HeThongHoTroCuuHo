@@ -4,6 +4,8 @@ from ..enum.rescue_status import RescueStatus
 from typing import Optional, List
 from typing import Optional
 import uuid
+from datetime import datetime
+import json
 
 class RescueRequestSchema(Schema):
     name: str = Field(..., description="Tên người liên hệ")
@@ -47,9 +49,47 @@ class RescueMapPoint(Schema):
     longitude: float
     status: str
 
+class RescueRequestTableRow(Schema):
+    id:uuid.UUID
+    name: str
+    contact_phone: str
+    adults: int
+    children: int
+    elderly: int
+    people_summary: str
+    latitude : float
+    longitude : float
+    address: str
+    status: str
+    created_at: datetime
+    conditions: List[str] = []
+    description_short: str
+    
+    @field_validator('conditions', mode='before')
+    @classmethod
+    def parse_conditions(cls, value):
+        # Nếu nhận vào là string (VD: '["A", "B"]'), ta parse nó ra
+        if isinstance(value, str):
+            try:
+                if not value.strip(): # Trường hợp chuỗi rỗng
+                    return []
+                return json.loads(value)
+            except ValueError:
+                # Trường hợp string không phải JSON hợp lệ, trả về list chứa string đó
+                # hoặc raise ValueError tùy logic
+                return [value] 
+        return value
+
+
 class ConditionTypeSchema(Schema):
     name: str
 
 class ConditionTypeOutSchema(Schema):
     id: str
     name: str
+
+class PaginatedRescueResponse(Schema):
+    items: List[RescueRequestTableRow]
+    total: int
+    page: int
+    page_size: int

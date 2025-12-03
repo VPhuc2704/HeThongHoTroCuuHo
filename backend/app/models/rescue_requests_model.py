@@ -34,4 +34,5 @@ class RescueRequest(TimeStampedModel):
             # models.Index(fields=["code"]),
             models.Index(fields=["created_at"], name='idx_created_at_desc'),
             models.Index(fields=["latitude", "longitude"], name='idx_lat_lng'),
+            models.Index(fields=['status'], name='idx_status'),
         ]

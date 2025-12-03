@@ -35,6 +35,7 @@ ALLOWED_HOSTS = ["*"]
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -42,10 +43,12 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'channels',
-    'app',
+    'app.app.AppConfig',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -73,7 +76,8 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'app.asgi.application'
+WSGI_APPLICATION = 'app.wsgi.application'
+ASGI_APPLICATION = 'app.asgi.application'
 
 
 # Database
@@ -175,3 +179,15 @@ CHANNEL_LAYERS = {
         "BACKEND": "channels.layers.InMemoryChannelLayer"
     }
 }
+
+
+# Cho phép tất cả các nguồn (Dùng cho Development cho nhanh)
+CORS_ALLOW_ALL_ORIGINS = True 
+
+# Hoặc nếu muốn bảo mật hơn thì chỉ cho phép Nuxt:
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:3000",
+# ]
+
+# Cho phép gửi cookie/token (Quan trọng cho đăng nhập)
+CORS_ALLOW_CREDENTIALS = True
