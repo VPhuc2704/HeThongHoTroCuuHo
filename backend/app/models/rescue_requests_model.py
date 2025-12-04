@@ -36,3 +36,20 @@ class RescueRequest(TimeStampedModel):
             models.Index(fields=["latitude", "longitude"], name='idx_lat_lng'),
             models.Index(fields=['status'], name='idx_status'),
         ]
+
+class RescueMedia(TimeStampedModel):
+    class MediaType(models.TextChoices):
+        IMAGE = 'IMAGE', 'Ảnh'
+        VIDEO = 'VIDEO', 'Video'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    rescue_request =  models.ForeignKey(
+        RescueRequest,
+        on_delete=models.CASCADE,
+        related_name='media_files'
+    )
+    file = models.FileField(upload_to='rescue_media/%Y/%m/%d/')
+    file_type = models.CharField(max_length=10, choices=MediaType.choices, default=MediaType.IMAGE )
+    
+    class Meta(TimeStampedModel.Meta , UnmanagedMeta):
+        db_table = "media"

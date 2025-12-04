@@ -64,11 +64,11 @@ class RescueRequestTableRow(Schema):
     created_at: datetime
     conditions: List[str] = []
     description_short: str
+    media_urls: List[str]=[]
     
     @field_validator('conditions', mode='before')
     @classmethod
     def parse_conditions(cls, value):
-        # Nếu nhận vào là string (VD: '["A", "B"]'), ta parse nó ra
         if isinstance(value, str):
             try:
                 if not value.strip(): # Trường hợp chuỗi rỗng
@@ -78,6 +78,19 @@ class RescueRequestTableRow(Schema):
                 # Trường hợp string không phải JSON hợp lệ, trả về list chứa string đó
                 # hoặc raise ValueError tùy logic
                 return [value] 
+        return value
+    @field_validator('media_urls', mode='before')
+    @classmethod
+    def parse_media(cls, value):
+        # Nếu DB trả về string '[]' hoặc '[{"url":...}]', ta parse nó ra
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except ValueError:
+                return []
+        # Nếu DB trả về None hoặc null, trả về list rỗng
+        if value is None:
+            return []
         return value
 
 

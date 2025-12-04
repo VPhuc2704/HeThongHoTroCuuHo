@@ -183,11 +183,36 @@ CHANNEL_LAYERS = {
 
 # Cho phép tất cả các nguồn (Dùng cho Development cho nhanh)
 CORS_ALLOW_ALL_ORIGINS = True 
-
 # Hoặc nếu muốn bảo mật hơn thì chỉ cho phép Nuxt:
 # CORS_ALLOWED_ORIGINS = [
 #     "http://localhost:3000",
 # ]
-
 # Cho phép gửi cookie/token (Quan trọng cho đăng nhập)
 CORS_ALLOW_CREDENTIALS = True
+
+
+# --- CẤU HÌNH MEDIA ---
+USE_CLOUD = os.getenv('USE_CLOUD', 'False') == 'True'
+
+if USE_CLOUD:
+    # Cấu hình AWS S3 (Khi deploy thật)
+    AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+    AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
+    AWS_S3_REGION_NAME = 'ap-southeast-1'
+    AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
+    
+    STORAGES = {
+        "default": {"BACKEND": "storages.backends.s3boto3.S3Boto3Storage"},
+        "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    }
+else:
+    # Cấu hình Local (Khi chạy trên máy tính)
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+    
+    STORAGES = {
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    }

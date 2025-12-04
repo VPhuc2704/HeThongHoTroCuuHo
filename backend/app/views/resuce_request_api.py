@@ -3,7 +3,7 @@ from app.schemas.rescue_request_schema import RescueRequestSchema, ConditionType
 from app.services import RescueRequestService, ConditionTypeService
 from app.security.jwt_provider import JwtProvider
 from typing import List, Optional
-from app.models import RescueRequest
+from ninja import UploadedFile, File
 
 rescue_service = RescueRequestService()
 condition_service = ConditionTypeService()
@@ -16,6 +16,18 @@ def create_rescue(request, data: RescueRequestSchema):
     return {
         "id": str(new_request.id),
         "status": new_request.status
+    }
+
+@api.post("/rescue/{rescue_id}/media")
+def upload_rescue_media(request, rescue_id: str, files: List[UploadedFile] = File(...)):
+    """ BƯỚC 2: Gửi file (Chạy ngầm) """
+    result = RescueRequestService.upload_media(rescue_id, files)
+    if not result:
+        return 404, {"message": "Không tìm thấy yêu cầu cứu hộ"}
+    
+    return {
+        "success": True,
+        "uploaded_count": len(result)
     }
 
 @api.get("/map-points", response=List[RescueMapPoint])

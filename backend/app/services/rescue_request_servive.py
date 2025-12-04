@@ -1,9 +1,10 @@
 from ..schemas.rescue_request_schema import RescueRequestSchema
-from ..models import RescueRequest, ConditionType
+from ..models import RescueRequest, ConditionType, RescueMedia
 from typing import Optional, List
 from ..models import Account
 from django.db import transaction, connection
 from django.db.models import Q
+from ninja import UploadedFile
 
 def dictfetchall(cursor):
     """
@@ -31,6 +32,30 @@ class RescueRequestService():
             # Ví dụ: Gửi thông báo socket realtime cho admin
             # notify_admin_new_request(instance)
             return instance_request
+        
+    def upload_media(request_id: str, files: List[UploadedFile]):
+        try:
+            req = RescueRequest.objects.get(id=request_id)
+
+        except RescueRequest.DoesNotExist:
+            return None
+        saved_media = []
+        with transaction.atomic():
+            for f in files:
+                # Detect loại file
+                m_type = RescueMedia.MediaType.IMAGE
+                if f.content_type and 'video' in f.content_type:
+                    m_type = RescueMedia.MediaType.VIDEO
+                
+                # Tạo record
+                media = RescueMedia.objects.create(
+                    rescue_request=req,
+                    file=f,
+                    file_type=m_type
+                )
+                saved_media.append(media)
+        return saved_media
+
     
     @staticmethod
     def get_map_points(min_lat: float, max_lat: float, 
@@ -56,7 +81,7 @@ class RescueRequestService():
 
         # Trả về list dictionary
         return list(qs)
-    
+
     # @staticmethod
     # def get_list_requests(page: int, size: int, status_filter: Optional[str] = None, search: Optional[str] = None):
     #     qs = RescueRequest.objects.order_by('-created_at')
@@ -115,6 +140,7 @@ class RescueRequestService():
     #         "page": page,
     #         "page_size": size
     #     }
+
     
     def get_list_requests_raw_sql(page: int, size: int, status_filter: str = None, search: str = None):
         params = {
@@ -124,50 +150,62 @@ class RescueRequestService():
             'search':f"%{search}%" if search else None
         }
 
-        condition = ["1=1"]
+        conditions = ["1=1"]
 
         if status_filter:
-            condition.append("""
-                (name ILIKE %(search)s or 
-                contact_phone ILIKE %(search)s or
-                address ILIKE %(search)s)
+            conditions.append("r.status = %(status)s")
+
+        if search:
+            conditions.append("""
+                (r.name ILIKE %(search)s or 
+                r.contact_phone ILIKE %(search)s or
+                r.address ILIKE %(search)s)
             """)
                 #  or
                 # code ILIKE %(search)s
-        where_clause = " AND".join(condition)
+        where_clause = " AND ".join(conditions)
 
         sql = f"""
             SELECT 
-                id, name, contact_phone, address, status, created_at, 
-                latitude, longitude, conditions,
-                adults, children, elderly,
-            LEFT(COALESCE(description, ''), 50) as description_short,
-            CASE
-                WHEN(adults + children + elderly) = 0 THEN '0'
-                ELSE CONCAT(
-                    (adults + children + elderly), 
-                    ' (',
-                    CONCAT_WS(', ',
-                        NULLIF(CONCAT(adults, ' lớn'), '0 lớn'),
-                        NULLIF(CONCAT(children, ' nhỏ'), '0 nhỏ'),
-                        NULLIF(CONCAT(elderly, ' già'), '0 già')
-                    ),
-                    ')'
-                )
-                END as people_summary
-            FROM rescue_requests
+                r.id, r.name, r.contact_phone, r.address, r.status, r.created_at, 
+                r.latitude, r.longitude, r.conditions,
+                r.adults, r.children, r.elderly,
+                
+                LEFT(COALESCE(r.description, ''), 50) as description_short,
+                
+                CASE 
+                    WHEN (r.adults + r.children + r.elderly) = 0 THEN '0'
+                    ELSE CONCAT(
+                        (r.adults + r.children + r.elderly), ' (',
+                        CONCAT_WS(', ',
+                            NULLIF(CONCAT(r.adults, ' lớn'), '0 lớn'),
+                            NULLIF(CONCAT(r.children, ' nhỏ'), '0 nhỏ'),
+                            NULLIF(CONCAT(r.elderly, ' già'), '0 già')
+                        ), ')'
+                    )
+                END as people_summary,
+
+                COALESCE(
+                    (
+                        SELECT json_agg(m.file)
+                        FROM media m
+                        WHERE m.rescue_request_id = r.id
+                    ), '[]'::json
+                ) as media_urls
+
+            FROM rescue_requests r
             WHERE {where_clause}
-            ORDER BY created_at DESC
+            ORDER BY r.created_at DESC
             LIMIT %(limit)s OFFSET %(offset)s
         """
 
-        const_sql = f"SELECT COUNT(*) FROM rescue_requests WHERE {where_clause}"
+        const_sql = f"SELECT COUNT(*) FROM rescue_requests r WHERE {where_clause}"
 
         with connection.cursor() as cursor:
             cursor.execute(const_sql, params=params)
             total_items = cursor.fetchone()[0]
-            cursor.execute(sql=sql, params=params)
 
+            cursor.execute(sql=sql, params=params)
             results = dictfetchall(cursor)
 
         return {
@@ -177,6 +215,8 @@ class RescueRequestService():
             "page_size": size
         }
     
+
+
 
 class ConditionTypeService:
     def create(self, name: str) -> ConditionType:
