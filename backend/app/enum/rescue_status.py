@@ -14,3 +14,14 @@ RESCUE_STATUS = {
     RescueStatus.COMPLETED: "Hoàn thành",
     RescueStatus.SAFE: "An Toàn",
 }
+
+class TaskStatus(str, Enum):
+    ASSIGNED    = 'Đã điều động'
+    IN_PROGRESS = 'Đang di chuyển'
+    ARRIVED     = 'Đã đến'
+    COMPLETED   = 'Hoàn thành'
+
+class TeamStatus(str, Enum):
+    AVAILABLE = 'Sẵn sàng'
+    BUSY      = 'Đang bận'
+    OFFLINE   = 'Ngoại tuyến'

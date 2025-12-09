@@ -216,3 +216,14 @@ else:
         "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
         "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
     }
+
+if os.name == 'nt':
+    # Đường dẫn đến thư mục osgeo (như bạn đã tìm thấy)
+    OSGEO_PATH = r"C:\Users\VanPhuc\AppData\Local\Programs\Python\Python39\Lib\site-packages\osgeo"
+
+    # Cấu hình tên file dựa trên ảnh bạn gửi:
+    GDAL_LIBRARY_PATH = os.path.join(OSGEO_PATH, 'gdal.dll')   # <--- Tên file trong ảnh là gdal.dll
+    GEOS_LIBRARY_PATH = os.path.join(OSGEO_PATH, 'geos_c.dll') # <--- File này nằm gần cuối ảnh
+
+    # Thêm vào biến môi trường để Windows nhận diện
+    os.environ['PATH'] = OSGEO_PATH + ';' + os.environ['PATH']

@@ -47,4 +47,4 @@ class JWTBearer(HttpBearer):
             raise HttpError(401, "User not found")
         
         request.user = account
-        return account
+        return str(account.id)

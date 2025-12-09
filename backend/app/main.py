@@ -7,6 +7,4 @@ api = NinjaAPI(title="RescueVN API", version="1.0.0")
 # Đăng ký global exception handler
 global_exception_handlers(api)
 
-from app.views import auth_api
-from app.views import account_api
-from app.views import resuce_request_api
+from app.views import auth_api, account_api, resuce_request_api, assign_api
