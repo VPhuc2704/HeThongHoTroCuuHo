@@ -1,15 +1,17 @@
-from ..main import api
-from app.schemas.rescue_request_schema import RescueRequestSchema, ConditionTypeOutSchema, ConditionTypeSchema, RescueMapPoint, PaginatedRescueResponse
+from ninja import Router
+from app.schemas.rescue_schema import RescueRequestSchema, ConditionTypeOutSchema, ConditionTypeSchema, RescueMapPoint, PaginatedRescueResponse
 from app.services import RescueRequestService, ConditionTypeService
 from app.security.jwt_provider import JwtProvider
 from typing import List, Optional
 from ninja import UploadedFile, File
 
+router = Router(tags=["Rescue Request"])
+
 rescue_service = RescueRequestService()
 condition_service = ConditionTypeService()
 
 # User gửi requets cứu hộ
-@api.post("/rescue")
+@router.post("/rescue")
 def create_rescue(request, data: RescueRequestSchema):
     user_account = JwtProvider.get_user_from_jwt(request)
     new_request = rescue_service.create_request(data, account=user_account)
@@ -18,7 +20,7 @@ def create_rescue(request, data: RescueRequestSchema):
         "status": new_request.status
     }
 
-@api.post("/rescue/{rescue_id}/media")
+@router.post("/rescue/{rescue_id}/media")
 def upload_rescue_media(request, rescue_id: str, files: List[UploadedFile] = File(...)):
     """ BƯỚC 2: Gửi file (Chạy ngầm) """
     result = RescueRequestService.upload_media(rescue_id, files)
@@ -30,7 +32,7 @@ def upload_rescue_media(request, rescue_id: str, files: List[UploadedFile] = Fil
         "uploaded_count": len(result)
     }
 
-@api.get("/map-points", response=List[RescueMapPoint])
+@router.get("/map-points", response=List[RescueMapPoint])
 def get_map_points(request, 
                    min_lat: float, max_lat: float, 
                    min_lng: float, max_lng: float,
@@ -47,7 +49,7 @@ def get_map_points(request,
     return map_points
 
 
-@api.get("/requests", response=PaginatedRescueResponse)
+@router.get("/requests", response=PaginatedRescueResponse)
 def list_rescue_requests(request, 
                         page: int = 1, 
                         page_size: int = 20, 
@@ -66,24 +68,24 @@ def list_rescue_requests(request,
     )
 
 
-@api.post("/condition", response=ConditionTypeOutSchema)
+@router.post("/condition", response=ConditionTypeOutSchema)
 def create_condition(request, data: ConditionTypeSchema):
     obj = condition_service.create(name=data.name)
     return {"id": str(obj.id), "name": obj.name}
 
-@api.get("/condition", response=list[ConditionTypeOutSchema])
+@router.get("/condition", response=list[ConditionTypeOutSchema])
 def list_condition(request):
     objs = condition_service.list()
     return [{"id": str(obj.id), "name": obj.name} for obj in objs]
 
-@api.put("/condition/{id}", response=ConditionTypeOutSchema)
+@router.put("/condition/{id}", response=ConditionTypeOutSchema)
 def update_condition(request, id: str, data: ConditionTypeSchema):
     obj = condition_service.update(id, data.name)
     if not obj:
         return {"error": "Not found"}
     return {"id": str(obj.id), "name": obj.name}
 
-@api.delete("/condition/{id}")
+@router.delete("/condition/{id}")
 def delete_condition(request, id: str):
     success = condition_service.delete(id)
     return {"success": success}

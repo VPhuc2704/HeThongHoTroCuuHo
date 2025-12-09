@@ -1,4 +1,4 @@
-from ..schemas.rescue_request_schema import RescueRequestSchema
+from ..schemas.rescue_schema import RescueRequestSchema
 from ..models import RescueRequest, ConditionType, RescueMedia
 from typing import Optional, List
 from ..models import Account

@@ -1,4 +1,4 @@
-from ..main import api
+from ninja import Router
 from ..schemas.assignments_schema import AssignTaskIn, ConfirmStartIn,FindNearest, NearestTeam
 from ..services import AssignService
 from app.security.jwt_bearer import JWTBearer
@@ -6,9 +6,10 @@ from app.security.permissions import require_role
 from ..enum.role_enum import RoleCode
 from typing import Optional, List
 
+router = Router(tags=["Account"])
 auth_bearer=JWTBearer()
 
-@api.post("/dispatch/assign", auth=auth_bearer, response=({200: dict, 400: dict, 500:dict}))
+@router.post("/dispatch/assign", auth=auth_bearer, response=({200: dict, 400: dict, 500:dict}))
 @require_role(RoleCode.ADMIN)
 def assign_task_endpoint(request, payload: AssignTaskIn):
     account_id = request.auth
@@ -32,7 +33,7 @@ def assign_task_endpoint(request, payload: AssignTaskIn):
         return 500, {"success": False, "message": "Lỗi hệ thống: " + str(e)}
 
 
-@api.post("/team/confirm-start", auth=auth_bearer)
+@router.post("/confirm-start", auth=auth_bearer)
 @require_role(RoleCode.RESCUER)
 def confirm_start_endpoint(request, payload: ConfirmStartIn):
     account_id = request.auth
@@ -51,7 +52,7 @@ def confirm_start_endpoint(request, payload: ConfirmStartIn):
     except ValueError as e:
         return 400, {"success": False, "message": str(e)}
     
-@api.get("/find-teams", response=List[NearestTeam])
+@router.get("/find-teams", response=List[NearestTeam])
 def find_teams_endpoint(request,  payload: FindNearest):
     teams = AssignService.find_nearest_teams(payload.latitude, payload.longitude, payload.radius_km)
     return teams

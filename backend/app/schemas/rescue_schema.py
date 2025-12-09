@@ -93,6 +93,19 @@ class RescueRequestTableRow(Schema):
             return []
         return value
 
+class RescueTeamOut(Schema):
+    id: uuid.UUID
+    name: str
+    latitude: Optional[float]
+    longitude: Optional[float]
+    contact_phone: Optional[str]
+    status: str
+
+class RescueTeamUpdate(Schema):
+    name: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    contact_phone: Optional[str] = None
 
 class ConditionTypeSchema(Schema):
     name: str
