@@ -44,4 +44,10 @@ class RescueAssignments(TimeStampedModel):
     completed_at = models.DateTimeField(null=True, blank=True)
     class Meta:
         db_table = 'rescue_assignments'
-    
+        constraints = [
+            #: Một cặp (Request + Team) chỉ được xuất hiện 1 lần
+            models.UniqueConstraint(
+                fields=['rescue_request', 'rescue_team'], 
+                name='unique_assignment_pair'
+            )
+        ]

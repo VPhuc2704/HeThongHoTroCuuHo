@@ -29,22 +29,25 @@ class JWTBearer(HttpBearer):
                 settings.JWT_SECRET, 
                 algorithms=[settings.JWT_ALGORITHM]
             )
+
+            if payload.get("type") != "access_token":
+                raise HttpError(401, "Invalid token type (Access token required)")
+
+            user_id = payload.get("user_id")
+            if not user_id:
+                raise HttpError(401, "Invalid token payload")
+
+            try:
+                account = Account.objects.get(id=user_id)
+            except Account.DoesNotExist:
+                raise HttpError(401, "User not found")
+
+            request.user = account
+            return account
+
         except ExpiredSignatureError:
-            raise HttpError(401, "Token expired")
+            raise HttpError(401, "Token has expired")
         except InvalidTokenError:
             raise HttpError(401, "Invalid token")
-        
-        if payload.get("type") != "access_token":
-            raise HttpError(401, "Invalid token type")
-        
-        account_id = payload.get("user_id")
-        if not account_id:
-            raise HttpError(401, "Invalid token payload")
-        
-        try:
-            account = Account.objects.get(id=account_id)
-        except Account.DoesNotExist:
-            raise HttpError(401, "User not found")
-        
-        request.user = account
-        return str(account.id)
+        except Exception:
+            raise HttpError(401, "Authentication Failed")

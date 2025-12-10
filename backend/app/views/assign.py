@@ -1,7 +1,7 @@
 from ninja import Router
 from ..schemas.assignments_schema import AssignTaskIn, ConfirmStartIn,FindNearest, NearestTeam
 from ..services import AssignService
-from app.security.jwt_bearer import JWTBearer
+from app.middleware.auth import JWTBearer
 from app.security.permissions import require_role
 from ..enum.role_enum import RoleCode
 from typing import Optional, List

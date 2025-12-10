@@ -1,7 +1,7 @@
 from ninja import Router
 from ..schemas.account_schema import AccountResponseSchema, AdminCreateAccountSchema, AccountListResponse
 from ..services import IAccountService, AccountService
-from app.security.jwt_bearer import JWTBearer
+from app.middleware.auth import JWTBearer
 from app.security.permissions import require_role
 from app.enum.role_enum import RoleCode
 from pydantic import ValidationError

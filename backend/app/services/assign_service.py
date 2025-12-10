@@ -25,7 +25,7 @@ class AssignService:
             )
 
             team.status= TeamStatus.BUSY
-            team.save
+            team.save()
             return task
         
     def confirm_team_start(assignment_id: str, account_id: str):

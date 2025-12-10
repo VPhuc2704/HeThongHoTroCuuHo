@@ -1,11 +1,45 @@
 from ninja import NinjaAPI
-from .custom_exceptions import InvalidToken, PermissionDenied
+from ninja.errors import ValidationError, HttpError
+from django.http import JsonResponse
+from .custom_exceptions import InvalidToken, PermissionDenied, BaseAppException
 
 def global_exception_handlers(api: NinjaAPI):
     @api.exception_handler(InvalidToken)
-    def invalid_token_handler(request, exc):
-        return api.create_response(request, data={"detail":str(exc)}, status=401)
+    def handle_app_exception(request, exc):
+        return JsonResponse({
+            "success": False,
+            "code": exc.code,      # Tự động lấy 401, 403, 404 tùy class
+            "message": exc.message,
+            "data": None,
+            "details": exc.details
+        }, status=exc.code)
+    
+    @api.exception_handler(ValidationError)
+    def handle_validation_error(request, exc):
+        return JsonResponse({
+            "success": False,
+            "code": 422,
+            "message": "Dữ liệu không hợp lệ",
+            "data": None,
+            "details": exc.errors # Chi tiết lỗi
+        }, status=422)
+    
+    @api.exception_handler(HttpError)
+    def handle_http_error(request, exc):
+        return JsonResponse({
+            "success": False,
+            "code": exc.status_code,
+            "message": str(exc),
+            "data": None,
+            "details": None
+        }, status=exc.status_code)
 
-    @api.exception_handler(PermissionDenied)
-    def permission_denied_handler(request, exc):
-        return api.create_response(request, data={"detail":str(exc)}, status=403)
+    @api.exception_handler(Exception)
+    def handle_general_exception(request, exc):
+        return JsonResponse({
+            "success": False,
+            "code": 500,
+            "message": "Lỗi hệ thống nội bộ",
+            "data": None,
+            "details": str(exc) # Ẩn đi khi deploy production
+        }, status=500)

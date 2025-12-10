@@ -1,7 +1,7 @@
 from ninja import Router
 from app.schemas.auth_schema import RegisterSchema, LoginSchema, UserOut
 from app.services import IAuthService, AuthService
-from app.security.jwt_bearer import JWTBearer
+from app.middleware.auth import JWTBearer
 from app.security.permissions import require_role
 from app.enum.role_enum import RoleCode
 from django.http import JsonResponse
