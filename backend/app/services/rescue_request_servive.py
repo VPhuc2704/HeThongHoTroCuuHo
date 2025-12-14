@@ -1,7 +1,7 @@
 from ..schemas.rescue_schema import RescueRequestSchema
-from ..models import RescueRequest, ConditionType, RescueMedia
+from ..models import RescueRequest, ConditionType, RescueMedia, Account
+from ..enum.rescue_status import RESCUE_STATUS, RescueStatus
 from typing import Optional, List
-from ..models import Account
 from django.db import transaction, connection
 from django.db.models import Q
 from ninja import UploadedFile
@@ -142,14 +142,17 @@ class RescueRequestService():
     #     }
 
     
-    def get_list_requests_raw_sql(page: int, size: int, status_filter: str = None, search: str = None):
+    def get_list_requests_raw_sql(page: int, size: int, status_filter: RescueStatus = None, search: str = None):
+        
+        vn_status_value = RESCUE_STATUS.get(status_filter) if status_filter else None
+        
         params = {
             'limit': size,
             'offset': (page - 1) * size,
-            'status':status_filter,
+            'status':vn_status_value,
             'search':f"%{search}%" if search else None
         }
-
+        
         conditions = ["1=1"]
 
         if status_filter:
@@ -191,7 +194,26 @@ class RescueRequestService():
                         FROM media m
                         WHERE m.rescue_request_id = r.id
                     ), '[]'::json
-                ) as media_urls
+                ) as media_urls,
+                
+                (
+                    SELECT json_build_object(
+                        'task_id', a.id,
+                        'status', a.status,
+                        'updated_at', a.updated_at,
+                        'team_name', t.name,
+                        'team_phone', t.contact_phone,
+                        'team_lat', t.latitude, 
+                        'team_lng', t.longitude
+                    )
+                    FROM rescue_assignments a
+                    JOIN rescue_teams t ON a.rescue_team_id = t.id
+                    WHERE a.rescue_request_id = r.id
+                    -- Chỉ lấy các trạng thái đang hoạt động
+                    AND a.status IN ('Đã điều động', 'Đang di chuyển', 'Đã đến', 'Hoàn thành')
+                    ORDER BY a.created_at DESC
+                    LIMIT 1
+                ) as active_assignment
 
             FROM rescue_requests r
             WHERE {where_clause}

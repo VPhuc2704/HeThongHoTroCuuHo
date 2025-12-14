@@ -57,8 +57,9 @@ def login(request, data: LoginSchema):
         "refresh_token",
         refresh,
         httponly=True,
-        secure=True,
-        samesite="Strict",
+        secure=False,
+        samesite="Lax",
+        domain=None,
         max_age=24 * 3600 * settings.REFRESH_EXP_DAYS,
     )
     return response

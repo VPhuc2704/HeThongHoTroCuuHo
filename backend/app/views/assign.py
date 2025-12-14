@@ -1,4 +1,4 @@
-from ninja import Router
+from ninja import Router, Query
 from ..schemas.assignments_schema import AssignTaskIn, ConfirmStartIn,FindNearest, NearestTeam
 from ..services import AssignService
 from app.middleware.auth import JWTBearer
@@ -12,12 +12,12 @@ auth_bearer=JWTBearer()
 @router.post("/dispatch/assign", auth=auth_bearer, response=({200: dict, 400: dict, 500:dict}))
 @require_role(RoleCode.ADMIN)
 def assign_task_endpoint(request, payload: AssignTaskIn):
-    account_id = request.auth
+    account = request.auth
     try:
         task = AssignService.assign_task(
             request_id=payload.request_id,
             team_id=payload.rescue_team_id,
-            admin_id=account_id
+            admin_id=account.id
         )
         
         return 200, {
@@ -53,6 +53,6 @@ def confirm_start_endpoint(request, payload: ConfirmStartIn):
         return 400, {"success": False, "message": str(e)}
     
 @router.get("/find-teams", response=List[NearestTeam])
-def find_teams_endpoint(request,  payload: FindNearest):
-    teams = AssignService.find_nearest_teams(payload.latitude, payload.longitude, payload.radius_km)
+def find_teams_endpoint(request, params: FindNearest = Query(...)):
+    teams = AssignService.find_nearest_teams(params.latitude, params.longitude, params.radius_km)
     return teams

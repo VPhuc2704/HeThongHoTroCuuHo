@@ -1,5 +1,5 @@
-from app.models import RescueTeam, Account
-from app.schemas.rescue_schema import RescueTeamOut 
+from app.models import RescueTeam
+from app.schemas.rescue_schema import RescueTeamUpdate
 from app.exception.custom_exceptions import ResourceNotFound, PermissionDenied
 from app.enum.role_enum import RoleCode
 class RescueService:
@@ -10,7 +10,7 @@ class RescueService:
         return []
 
 
-    def update_rescue_team(account, team_id, payload):
+    def update_rescue_team(account, team_id: str, payload: RescueTeamUpdate):
         try:
             team = RescueTeam.objects.get(id=team_id)
         except:
@@ -22,7 +22,7 @@ class RescueService:
         if not is_admin and is_owner:
             raise PermissionDenied("Bạn không có quyền sửa đội này.")
         
-        data = payload.dict(exclude_unset=True)
+        data = payload.model_dump(exclude_unset=True)
 
         for attr, value in data.items():
             setattr(team, attr, value)
@@ -31,7 +31,7 @@ class RescueService:
         return team
     
 
-    def delete_team(team_id):
+    def delete_team(team_id: str):
         try:
             team = RescueTeam.objects.get(id=team_id)
             team.delete()

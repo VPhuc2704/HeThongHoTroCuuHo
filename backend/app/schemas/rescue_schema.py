@@ -49,6 +49,15 @@ class RescueMapPoint(Schema):
     longitude: float
     status: str
 
+class ActiveAssignmentSchema(Schema):
+    task_id: uuid.UUID
+    status: str
+    team_name: Optional[str] = None 
+    team_phone: Optional[str] = None 
+    team_lat: Optional[float] = None
+    team_lng: Optional[float] = None
+    updated_at: Optional[datetime] = None
+    
 class RescueRequestTableRow(Schema):
     id:uuid.UUID
     name: str
@@ -65,6 +74,7 @@ class RescueRequestTableRow(Schema):
     conditions: List[str] = []
     description_short: str
     media_urls: List[str]=[]
+    active_assignment: Optional[ActiveAssignmentSchema] = None
     
     @field_validator('conditions', mode='before')
     @classmethod

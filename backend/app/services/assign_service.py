@@ -1,8 +1,11 @@
 from django.db import transaction
 from django.http import Http404
-from  ..models import RescueRequest, RescueTeam, RescueAssignments
-from ..enum.rescue_status import TeamStatus, TaskStatus
+from django.core.exceptions import ValidationError
 from django.db.models.expressions import RawSQL
+from django.utils import timezone
+from ..models import RescueRequest, RescueTeam, RescueAssignments
+from ..enum.rescue_status import TeamStatus, TaskStatus, RescueStatus, RESCUE_STATUS
+from ..enum.role_enum import RoleCode
 
 class AssignService:
     def assign_task(request_id: str, team_id: str, admin_id: str):
@@ -13,19 +16,26 @@ class AssignService:
                 raise ValueError(f"Đội {team.name} đang nhận nhiệm vụ khác.")
             
             try:
-                request = RescueRequest.objects.get(id=request_id)
+                request = RescueRequest.objects.select_for_update().get(id=request_id)
             except:
                 raise Http404("Không tìm thấy yêu cầu cứu hộ")
+            
+            if request.status != RESCUE_STATUS[RescueStatus.PENDING]:
+                raise ValidationError("Yêu cầu này đã có người nhận hoặc đã bị hủy.")
             
             task = RescueAssignments.objects.create(
                 rescue_request = request,
                 rescue_team=team,
                 assigned_by=admin_id,
-                status=TaskStatus.ASSIGNED
+                status=TaskStatus.ASSIGNED,
+                assigned_at=timezone.now()
             )
 
             team.status= TeamStatus.BUSY
             team.save()
+
+            request.status= RESCUE_STATUS[RescueStatus.ASSIGNED]
+            request.save()
             return task
         
     def confirm_team_start(assignment_id: str, account_id: str):
@@ -39,12 +49,13 @@ class AssignService:
                 id=assignment_id,
                 status=TaskStatus.ASSIGNED,
                 rescue_team=team
-            ).first
+            ).first()
 
             if not task:
                 raise ValueError("Nhiệm vụ không tồn tại hoặc đã được xử lý.")
             
             task.status = TaskStatus.IN_PROGRESS
+            task.accepted_at = timezone.now()
             task.save()
 
     def find_nearest_teams(lat:float, long: float, radius_km: float):
@@ -88,4 +99,10 @@ class AssignService:
             else: team["distance"] = 0.0
         
         return raw_data
+    
+            
+    def get_assign(user):
+        if user.role.code == RoleCode.ADMIN:
+            return RescueAssignments.objects.select_related('rescue_request', 'rescue_team').all().order_by('-created_at')
+        return []
             
