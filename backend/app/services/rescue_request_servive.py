@@ -1,7 +1,7 @@
 from ..schemas.rescue_schema import RescueRequestSchema
 from ..models import RescueRequest, ConditionType, RescueMedia, Account
 from ..enum.rescue_status import RESCUE_STATUS, RescueStatus
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from django.db import transaction, connection
 from django.db.models import Q
 from ninja import UploadedFile
@@ -56,6 +56,136 @@ class RescueRequestService():
                 saved_media.append(media)
         return saved_media
 
+    @classmethod
+    def _execute_search_query(cls, conditions: List[str], params: Dict[str, Any], page: int, size: int):
+        """
+        Hàm private dùng chung để chạy câu SQL phức tạp.
+        """
+        where_clause = " AND ".join(conditions)
+
+        # SQL Query dùng chung
+        sql = f"""
+            SELECT 
+                r.id, r.name, r.contact_phone, r.address, r.status, r.created_at, 
+                r.latitude, r.longitude, r.conditions,
+                r.adults, r.children, r.elderly,
+                
+                LEFT(COALESCE(r.description, ''), 50) as description_short,
+                
+                -- Summary số người
+                CASE 
+                    WHEN (r.adults + r.children + r.elderly) = 0 THEN '0'
+                    ELSE CONCAT(
+                        (r.adults + r.children + r.elderly), ' (',
+                        CONCAT_WS(', ',
+                            NULLIF(CONCAT(r.adults, ' lớn'), '0 lớn'),
+                            NULLIF(CONCAT(r.children, ' nhỏ'), '0 nhỏ'),
+                            NULLIF(CONCAT(r.elderly, ' già'), '0 già')
+                        ), ')'
+                    )
+                END as people_summary,
+
+                -- Media URLs
+                COALESCE(
+                    (
+                        SELECT json_agg(m.file)
+                        FROM media m
+                        WHERE m.rescue_request_id = r.id
+                    ), '[]'::json
+                ) as media_urls,
+                
+                -- Active Assignment
+                (
+                    SELECT json_build_object(
+                        'task_id', a.id,
+                        'status', a.status,
+                        'updated_at', a.updated_at,
+                        'team_name', t.name,
+                        'team_phone', t.contact_phone,
+                        'team_lat', t.latitude, 
+                        'team_lng', t.longitude
+                    )
+                    FROM rescue_assignments a
+                    JOIN rescue_teams t ON a.rescue_team_id = t.id
+                    WHERE a.rescue_request_id = r.id
+                    AND a.status IN ('Đã điều động', 'Đang di chuyển', 'Đã đến', 'Hoàn thành')
+                    ORDER BY a.created_at DESC
+                    LIMIT 1
+                ) as active_assignment
+
+            FROM rescue_requests r
+            WHERE {where_clause}
+            ORDER BY r.created_at DESC
+            LIMIT %(limit)s OFFSET %(offset)s
+        """
+
+        count_sql = f"SELECT COUNT(*) FROM rescue_requests r WHERE {where_clause}"
+
+        with connection.cursor() as cursor:
+            # 1. Đếm tổng
+            cursor.execute(count_sql, params=params)
+            total_items = cursor.fetchone()[0]
+
+            # 2. Lấy dữ liệu
+            cursor.execute(sql, params=params)
+            results = dictfetchall(cursor)
+
+        return {
+            "items": results,
+            "total": total_items,
+            "page": page,
+            "page_size": size
+        }
+
+    @classmethod
+    def _build_common_params(cls, page: int, size: int, status_filter: RescueStatus = None, search: str = None):
+        """Helper để build params cơ bản"""
+        vn_status_value = RESCUE_STATUS.get(status_filter) if status_filter else None
+        
+        params = {
+            'limit': size,
+            'offset': (page - 1) * size,
+            'status': vn_status_value,
+            'search': f"%{search}%" if search else None
+        }
+        
+        conditions = []
+        
+        if status_filter:
+            conditions.append("r.status = %(status)s")
+            
+        if search:
+            conditions.append("""
+                (r.name ILIKE %(search)s or 
+                r.contact_phone ILIKE %(search)s or
+                r.address ILIKE %(search)s)
+            """)
+            
+        return params, conditions
+
+    @classmethod
+    def get_my_requests(cls, account_id: str, page: int, size: int, status_filter: RescueStatus = None, search: str = None):
+        # 1. Lấy params chung
+        params, conditions = cls._build_common_params(page, size, status_filter, search)
+        
+        # 2. Thêm params riêng cho My Request
+        params['account_id'] = account_id
+        conditions.insert(0, "r.account_id = %(account_id)s")
+
+        # 3. Thực thi
+        return cls._execute_search_query(conditions, params, page, size)
+
+    @classmethod
+    def get_list_requests_raw_sql(cls, page: int, size: int, status_filter: RescueStatus = None, search: str = None):
+        # 1. Lấy params chung
+        params, conditions = cls._build_common_params(page, size, status_filter, search)
+        
+        if not conditions:
+            conditions.append("1=1")
+
+        # 3. Thực thi
+        return cls._execute_search_query(conditions, params, page, size)
+        
     
     @staticmethod
     def get_map_points(min_lat: float, max_lat: float, 
@@ -81,162 +211,6 @@ class RescueRequestService():
 
         # Trả về list dictionary
         return list(qs)
-
-    # @staticmethod
-    # def get_list_requests(page: int, size: int, status_filter: Optional[str] = None, search: Optional[str] = None):
-    #     qs = RescueRequest.objects.order_by('-created_at')
-    #     qs = qs.only(
-    #         'id', 'name', 'contact_phone', 'address', 'status', 'created_at', 'latitude', 'longitude',
-    #         'adults', 'children', 'elderly', 'conditions', 'description'
-    #     )
-
-    #     if status_filter:
-    #         qs = qs.filter(status=status_filter)
-        
-    #     if search:
-    #         qs.filter(
-    #             Q(name__icontains=search) |
-    #             Q(contact_phone__icontains=search) |
-    #             Q(address__icontains=search)
-    #         )
-        
-    #     total_items = qs.count()
-    #     start = (page - 1) * size
-    #     end = start + size
-
-    #     data_list = qs[start:end]
-    #     results = []
-    #     for item in data_list:
-    #         # Logic tạo chuỗi tóm tắt số người
-    #         total_people = item.adults + item.children + item.elderly
-    #         details = []
-    #         if item.adults: details.append(f"{item.adults} lớn")
-    #         if item.children: details.append(f"{item.children} nhỏ")
-    #         if item.elderly: details.append(f"{item.elderly} già")
-    #         summary_str = f"{total_people} ({', '.join(details)})" if details else "0"
-
-    #         # Xử lý description dài quá thì cắt bớt
-    #         desc_short = (item.description[:50] + '...') if item.description and len(item.description) > 50 else item.description
-
-    #         results.append({
-    #             "id": item.id,
-    #             "name": item.name,
-    #             "contact_phone": item.contact_phone,
-    #             "adults": item.adults,
-    #             "children": item.children,
-    #             "elderly": item.elderly,
-    #             "people_summary": summary_str, # Field tiện ích cho frontend
-    #             "latitude":item.latitude,
-    #             "longitude":item.longitude,
-    #             "address": item.address,
-    #             "status": item.status,
-    #             "created_at": item.created_at,
-    #             "conditions": item.conditions, # Django tự convert JSONField sang list Python
-    #             "description_short": desc_short
-    #         })
-    #     return {
-    #         "items": results,
-    #         "total": total_items,
-    #         "page": page,
-    #         "page_size": size
-    #     }
-
-    
-    def get_list_requests_raw_sql(page: int, size: int, status_filter: RescueStatus = None, search: str = None):
-        
-        vn_status_value = RESCUE_STATUS.get(status_filter) if status_filter else None
-        
-        params = {
-            'limit': size,
-            'offset': (page - 1) * size,
-            'status':vn_status_value,
-            'search':f"%{search}%" if search else None
-        }
-        
-        conditions = ["1=1"]
-
-        if status_filter:
-            conditions.append("r.status = %(status)s")
-
-        if search:
-            conditions.append("""
-                (r.name ILIKE %(search)s or 
-                r.contact_phone ILIKE %(search)s or
-                r.address ILIKE %(search)s)
-            """)
-                #  or
-                # code ILIKE %(search)s
-        where_clause = " AND ".join(conditions)
-
-        sql = f"""
-            SELECT 
-                r.id, r.name, r.contact_phone, r.address, r.status, r.created_at, 
-                r.latitude, r.longitude, r.conditions,
-                r.adults, r.children, r.elderly,
-                
-                LEFT(COALESCE(r.description, ''), 50) as description_short,
-                
-                CASE 
-                    WHEN (r.adults + r.children + r.elderly) = 0 THEN '0'
-                    ELSE CONCAT(
-                        (r.adults + r.children + r.elderly), ' (',
-                        CONCAT_WS(', ',
-                            NULLIF(CONCAT(r.adults, ' lớn'), '0 lớn'),
-                            NULLIF(CONCAT(r.children, ' nhỏ'), '0 nhỏ'),
-                            NULLIF(CONCAT(r.elderly, ' già'), '0 già')
-                        ), ')'
-                    )
-                END as people_summary,
-
-                COALESCE(
-                    (
-                        SELECT json_agg(m.file)
-                        FROM media m
-                        WHERE m.rescue_request_id = r.id
-                    ), '[]'::json
-                ) as media_urls,
-                
-                (
-                    SELECT json_build_object(
-                        'task_id', a.id,
-                        'status', a.status,
-                        'updated_at', a.updated_at,
-                        'team_name', t.name,
-                        'team_phone', t.contact_phone,
-                        'team_lat', t.latitude, 
-                        'team_lng', t.longitude
-                    )
-                    FROM rescue_assignments a
-                    JOIN rescue_teams t ON a.rescue_team_id = t.id
-                    WHERE a.rescue_request_id = r.id
-                    -- Chỉ lấy các trạng thái đang hoạt động
-                    AND a.status IN ('Đã điều động', 'Đang di chuyển', 'Đã đến', 'Hoàn thành')
-                    ORDER BY a.created_at DESC
-                    LIMIT 1
-                ) as active_assignment
-
-            FROM rescue_requests r
-            WHERE {where_clause}
-            ORDER BY r.created_at DESC
-            LIMIT %(limit)s OFFSET %(offset)s
-        """
-
-        const_sql = f"SELECT COUNT(*) FROM rescue_requests r WHERE {where_clause}"
-
-        with connection.cursor() as cursor:
-            cursor.execute(const_sql, params=params)
-            total_items = cursor.fetchone()[0]
-
-            cursor.execute(sql=sql, params=params)
-            results = dictfetchall(cursor)
-
-        return {
-            "items": results,
-            "total": total_items,
-            "page": page,
-            "page_size": size
-        }
-    
 
 
 

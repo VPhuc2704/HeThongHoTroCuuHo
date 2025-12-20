@@ -2,6 +2,7 @@ from ninja import Router
 from app.schemas.rescue_schema import RescueRequestSchema, ConditionTypeOutSchema, ConditionTypeSchema, RescueMapPoint, PaginatedRescueResponse
 from app.services import RescueRequestService, ConditionTypeService
 from app.security.jwt_provider import JwtProvider
+from app.middleware.auth import JWTBearer
 from typing import List, Optional
 from ninja import UploadedFile, File
 
@@ -9,6 +10,7 @@ router = Router(tags=["Rescue Request"])
 
 rescue_service = RescueRequestService()
 condition_service = ConditionTypeService()
+
 
 # User gửi requets cứu hộ
 @router.post("/rescue")
@@ -31,6 +33,20 @@ def upload_rescue_media(request, rescue_id: str, files: List[UploadedFile] = Fil
         "success": True,
         "uploaded_count": len(result)
     }
+
+
+@router.get("/my-requests/history", auth=JWTBearer(), response=PaginatedRescueResponse)
+def list_my_requests(request, page: int = 1, size: int = 20, status: str = None, search: str = None):
+    account_id = request.user.id
+
+    return RescueRequestService.get_my_requests(
+        account_id=account_id,
+        page=page,
+        size=size,
+        status_filter=status,
+        search=search
+    )
+
 
 @router.get("/map-points", response=List[RescueMapPoint])
 def get_map_points(request, 
