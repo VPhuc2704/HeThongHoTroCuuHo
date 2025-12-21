@@ -18,7 +18,7 @@ def create_rescue(request, data: RescueRequestSchema):
     user_account = JwtProvider.get_user_from_jwt(request)
     new_request = rescue_service.create_request(data, account=user_account)
     return {
-        "id": str(new_request.id),
+        "id": str(new_request.code),
         "status": new_request.status
     }
 

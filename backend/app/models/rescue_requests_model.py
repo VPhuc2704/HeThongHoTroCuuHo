@@ -11,7 +11,7 @@ from django.utils.timezone import now
 class RescueRequest(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     account = models.ForeignKey(Account, null=True, blank=True ,on_delete=models.CASCADE, related_name="rescue_requests")
-    # code = models.CharField(max_length=30, unique=True, db_index=True)
+    code = models.CharField(max_length=30, unique=True)
     name = models.CharField(max_length=255)
     contact_phone = models.CharField(max_length=20)
     adults = models.IntegerField(default=0)

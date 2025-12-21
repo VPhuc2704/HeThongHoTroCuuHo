@@ -8,6 +8,7 @@ from datetime import datetime
 import json
 
 class RescueRequestSchema(Schema):
+    code: str
     name: str = Field(..., description="Tên người liên hệ")
     contact_phone: str = Field(..., description="Số điện thoại liên hệ")
     adults: int = 0
@@ -48,6 +49,7 @@ class RescueMapPoint(Schema):
     latitude: float
     longitude: float
     status: str
+    code:str
 
 class ActiveAssignmentSchema(Schema):
     task_id: uuid.UUID
@@ -60,6 +62,7 @@ class ActiveAssignmentSchema(Schema):
     
 class RescueRequestTableRow(Schema):
     id:uuid.UUID
+    code: str
     name: str
     contact_phone: str
     adults: int

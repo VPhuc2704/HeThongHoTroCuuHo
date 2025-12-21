@@ -4,6 +4,7 @@ from ..enum.rescue_status import RESCUE_STATUS, RescueStatus
 from typing import Optional, List, Dict, Any
 from django.db import transaction, connection
 from django.db.models import Q
+from django.utils import timezone
 from ninja import UploadedFile
 
 def dictfetchall(cursor):
@@ -22,10 +23,14 @@ class RescueRequestService():
 
         payload = data.model_dump()  # chuyển Schema sang dict
 
+        province_code = payload.pop('code', 'VN')
+
         if account:
             payload["account"] = account
 
         with transaction.atomic():
+            new_code = RescueRequestService._generate_code(province_code)
+            payload['code'] = new_code
             instance_request = RescueRequest.objects.create(**payload)
             
             # --- Logic mở rộng ---
@@ -66,7 +71,7 @@ class RescueRequestService():
         # SQL Query dùng chung
         sql = f"""
             SELECT 
-                r.id, r.name, r.contact_phone, r.address, r.status, r.created_at, 
+                r.id, r.code ,r.name, r.contact_phone, r.address, r.status, r.created_at, 
                 r.latitude, r.longitude, r.conditions,
                 r.adults, r.children, r.elderly,
                 
@@ -201,17 +206,38 @@ class RescueRequestService():
         elif zoom >= 10:    # Zoom vừa (Cấp Quận/Huyện)
             limit = 2000
             
-        # 2. Logic truy vấn: Tối ưu hoá SQL (Zero Loop)
         qs = RescueRequest.objects.filter(
             latitude__gte=min_lat, latitude__lte=max_lat,
             longitude__gte=min_lng, longitude__lte=max_lng
         ).values(
-            'id', 'latitude', 'longitude', 'status'
+            'id', 'latitude', 'longitude', 'status', "code" 
         ).order_by('-created_at')[:limit]
 
         # Trả về list dictionary
         return list(qs)
-
+    
+    @staticmethod
+    def _generate_code(province_code: str) -> str:
+        """
+        Input: 'SG' (Sài Gòn)
+        Output: 'SG-20251221-0001'
+        """
+        p_code = province_code.upper() # sg -> SG   
+        today_str = timezone.now().strftime('%Y%m%d')
+        
+        prefix = f"{p_code}-{today_str}-"
+        
+        with transaction.atomic():
+            last_request = RescueRequest.objects.filter(
+                code__startswith=prefix
+            ).select_for_update().order_by('-code').first()
+            
+            if last_request:
+                last_seq_str = last_request.code.split('-')[-1]
+                new_seq = int(last_seq_str) + 1
+            else:
+                new_seq = 1
+            return f"{prefix}{new_seq:04d}"
 
 
 class ConditionTypeService:
