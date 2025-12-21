@@ -1,16 +1,18 @@
-from app.main import api
+from ninja import Router
 from app.schemas.auth_schema import RegisterSchema, LoginSchema, UserOut
 from app.services import IAuthService, AuthService
-from app.security.jwt_bearer import JWTBearer
+from app.middleware.auth import JWTBearer
 from app.security.permissions import require_role
 from app.enum.role_enum import RoleCode
 from django.http import JsonResponse
 from django.conf import settings
 
+router = Router(tags=["Authen"])
+
 auth_service: IAuthService =  AuthService()
 auth_bearer = JWTBearer()
 
-@api.post("/register", response={201: dict, 400: dict})
+@router.post("/register", response={201: dict, 400: dict})
 def register(request, data: RegisterSchema):
     if not data.email and not data.phone:
         return 400, {'detail': "Thiếu thông tin đăng nhập"}
@@ -28,7 +30,7 @@ def register(request, data: RegisterSchema):
     }
     
 
-@api.post("/login", response={200: UserOut, 400: dict})
+@router.post("/login", response={200: UserOut, 400: dict})
 def login(request, data: LoginSchema):
     if not data.identifier:
         return 400, {'detail': "Thiếu thông tin đăng nhập"}
@@ -55,18 +57,14 @@ def login(request, data: LoginSchema):
         "refresh_token",
         refresh,
         httponly=True,
-        secure=True,
-        samesite="Strict",
+        secure=False,
+        samesite="Lax",
+        domain=None,
         max_age=24 * 3600 * settings.REFRESH_EXP_DAYS,
     )
     return response
 
-@api.get("/api/admin/dashboards", auth=auth_bearer)
-@require_role(RoleCode.CITIZEN)
-def admin_dashboard(request):
-    return {"message": f"Welcome admin {request.user.email}"}
-
-@api.post("/refresh", response={200: dict, 401: dict})
+@router.post("/refresh", response={200: dict, 401: dict})
 def refresh(request):
     refresh_token =  request.COOKIES.get("refresh_token")
     
@@ -84,7 +82,7 @@ def refresh(request):
     }
 
 
-@api.post("/logout", response={200:dict, 400: dict})
+@router.post("/logout", response={200:dict, 400: dict})
 def logout(request, data: dict = None):
     refresh_token = request.COOKIES.get("refresh_token")
 

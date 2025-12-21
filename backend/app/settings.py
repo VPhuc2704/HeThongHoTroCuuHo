@@ -35,17 +35,20 @@ ALLOWED_HOSTS = ["*"]
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
-    'app',
+    'channels',
+    'app.app.AppConfig',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -74,6 +77,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'app.wsgi.application'
+ASGI_APPLICATION = 'app.asgi.application'
 
 
 # Database
@@ -169,3 +173,57 @@ JWT_ALGORITHM: Final[str] = os.getenv('JWT_ALGORITHM', 'HS256')
 ACCESS_EXPIRE_MINUTES: Final[int] = int(os.getenv('ACCESS_EXPIRE_MINUTES', '60'))
 REFRESH_EXP_DAYS: Final[int] = int(os.getenv('REFRESH_EXPIRE_DAYS', '7'))
 
+# Cấu hình Channel Layer (Dùng bộ nhớ RAM để test cho nhanh)
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer"
+    }
+}
+
+
+# Cho phép tất cả các nguồn (Dùng cho Development cho nhanh)
+CORS_ALLOW_ALL_ORIGINS = True 
+# Hoặc nếu muốn bảo mật hơn thì chỉ cho phép Nuxt:
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:3000",
+# ]
+# Cho phép gửi cookie/token (Quan trọng cho đăng nhập)
+CORS_ALLOW_CREDENTIALS = True
+
+
+# --- CẤU HÌNH MEDIA ---
+USE_CLOUD = os.getenv('USE_CLOUD', 'False') == 'True'
+
+if USE_CLOUD:
+    # Cấu hình AWS S3 (Khi deploy thật)
+    AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+    AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
+    AWS_S3_REGION_NAME = 'ap-southeast-1'
+    AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
+    
+    STORAGES = {
+        "default": {"BACKEND": "storages.backends.s3boto3.S3Boto3Storage"},
+        "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    }
+else:
+    # Cấu hình Local (Khi chạy trên máy tính)
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+    
+    STORAGES = {
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    }
+
+if os.name == 'nt':
+    # Đường dẫn đến thư mục osgeo (như bạn đã tìm thấy)
+    OSGEO_PATH = r"C:\Users\VanPhuc\AppData\Local\Programs\Python\Python39\Lib\site-packages\osgeo"
+
+    # Cấu hình tên file dựa trên ảnh bạn gửi:
+    GDAL_LIBRARY_PATH = os.path.join(OSGEO_PATH, 'gdal.dll')   # <--- Tên file trong ảnh là gdal.dll
+    GEOS_LIBRARY_PATH = os.path.join(OSGEO_PATH, 'geos_c.dll') # <--- File này nằm gần cuối ảnh
+
+    # Thêm vào biến môi trường để Windows nhận diện
+    os.environ['PATH'] = OSGEO_PATH + ';' + os.environ['PATH']

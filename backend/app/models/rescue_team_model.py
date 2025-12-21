@@ -1,7 +1,10 @@
 from django.db import models
+from django.db.models import Q
 from .base_model import TimeStampedModel
 from .account_model import Account
 from .unmanaged_meta import UnmanagedMeta
+from ..enum.rescue_status import TaskStatus, TeamStatus
+from .rescue_requests_model import RescueRequest
 import uuid
 
 class RescueTeam(TimeStampedModel):
@@ -11,6 +14,40 @@ class RescueTeam(TimeStampedModel):
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
     contact_phone = models.CharField(max_length=20, null=True, blank=True)
-
+    status = models.CharField(
+        max_length=50,
+        choices=[(tag.value, tag.value)for tag in TeamStatus],
+        default=TeamStatus.AVAILABLE
+    )
     class Meta(TimeStampedModel.Meta, UnmanagedMeta):
         db_table = "rescue_teams"
+        indexes = [
+            models.Index(
+                fields=['latitude', 'longitude'],
+                name='idx_avail_team_loc',
+                condition=Q(status='Sẵn sàng') 
+            )
+        ]
+
+class RescueAssignments(TimeStampedModel):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    rescue_request = models.ForeignKey(RescueRequest, on_delete=models.CASCADE, related_name='assignments')
+    rescue_team = models.ForeignKey(RescueTeam, on_delete=models.CASCADE, related_name='assignments')
+    assigned_by = models.UUIDField(null=True)
+    status = models.CharField(
+        max_length=50, 
+        choices=[(tag.value, tag.value) for tag in TaskStatus],
+        default=TaskStatus.ASSIGNED        
+    )
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    class Meta:
+        db_table = 'rescue_assignments'
+        constraints = [
+            #: Một cặp (Request + Team) chỉ được xuất hiện 1 lần
+            models.UniqueConstraint(
+                fields=['rescue_request', 'rescue_team'], 
+                name='unique_assignment_pair'
+            )
+        ]

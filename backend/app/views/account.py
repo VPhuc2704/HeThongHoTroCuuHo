@@ -1,15 +1,17 @@
-from ..main import api
+from ninja import Router
 from ..schemas.account_schema import AccountResponseSchema, AdminCreateAccountSchema, AccountListResponse
 from ..services import IAccountService, AccountService
-from app.security.jwt_bearer import JWTBearer
+from app.middleware.auth import JWTBearer
 from app.security.permissions import require_role
 from app.enum.role_enum import RoleCode
 from pydantic import ValidationError
 
+router = Router(tags=["Account"])
+
 account_service: IAccountService = AccountService()
 auth_bearer = JWTBearer()
 
-@api.post("/admin/accounts", auth= auth_bearer, response={201: AccountResponseSchema, 400: dict})
+@router.post("/admin/accounts", auth= auth_bearer, response={201: AccountResponseSchema, 400: dict})
 @require_role(RoleCode.ADMIN)
 def admin_create_account(request, data: AdminCreateAccountSchema):
     if not data.email and not data.phone:
@@ -29,7 +31,7 @@ def admin_create_account(request, data: AdminCreateAccountSchema):
         "data": account
     }
 
-@api.get("/admin/accounts", auth=auth_bearer, response=AccountListResponse)
+@router.get("/admin/accounts", auth=auth_bearer, response=AccountListResponse)
 @require_role(RoleCode.ADMIN)
 def list_accounts(request, limit: int = 20, cursor: str = None):
     return account_service.get_list_accounts(limit=limit, cursor=cursor)
