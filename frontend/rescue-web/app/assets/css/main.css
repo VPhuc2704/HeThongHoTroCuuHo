@@ -1,0 +1,15 @@
+:root {
+  /* Ghi đè màu gốc của Element Plus thành màu Đỏ (#DC2626) */
+  --el-color-primary: #DC2626;
+  --el-color-primary-light-3: #EF4444;
+  --el-color-primary-light-5: #F87171;
+  --el-color-primary-light-7: #FCA5A5;
+  --el-color-primary-light-9: #FEE2E2;
+  --el-color-primary-dark-2: #B91C1C;
+}
+
+/* Đảm bảo nền trang web hơi xám để làm nổi bật nội dung */
+body {
+    background-color: #F3F4F6; /* gray-100 */
+    margin: 0;
+}
