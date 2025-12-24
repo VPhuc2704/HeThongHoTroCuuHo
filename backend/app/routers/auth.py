@@ -1,5 +1,12 @@
 from ninja import Router
-from app.schemas.auth_schema import RegisterSchema, LoginSchema, UserOut
+from ninja.responses import Response
+from ninja.errors import ValidationError
+from app.schemas.auth_schema import (
+    RegisterRequest, 
+    GoogleAuthRequest, 
+    LoginSchema, UserOut, 
+    GoogleLoginResponse
+)
 from app.services import IAuthService, AuthService
 from app.middleware.auth import JWTBearer
 from app.security.permissions import require_role
@@ -12,50 +19,53 @@ router = Router(tags=["Authen"])
 auth_service: IAuthService =  AuthService()
 auth_bearer = JWTBearer()
 
-@router.post("/register", response={201: dict, 400: dict})
-def register(request, data: RegisterSchema):
-    if not data.email and not data.phone:
+@router.post("/register", response={201: dict, 400: dict, 500: dict})
+def register(request, payload: RegisterRequest):
+    try:
+        user = auth_service.register(
+            phone=payload.phone,
+            password=payload.password,
+            full_name=payload.full_name
+        )
+        return 201, {
+            "status": "success",
+            "message": "Đăng ký thành công",
+            "data": {
+                "id": str(user.id),
+                "full_name": user.full_name
+            }
+        }
+
+    except ValidationError as e:
+        return 400, {"detail": str(e)}
+
+    except ValidationError as e:
+        return 500, {"detail": "Lỗi hệ thống, vui lòng thử lại sau."}
+        
+
+@router.post("/login", response={200: dict, 400: dict})
+def login(request, payload: LoginSchema):
+    if not payload.identifier:
         return 400, {'detail': "Thiếu thông tin đăng nhập"}
     
-    user, error = auth_service.register(email=data.email, phone=data.phone, password=data.password)
-
-    if error: 
-        return 400, {"detail": error}
-    return 201, {
-        "status": "success",
-        "message": "Đăng ký thành công",
-        "data": {
-            "id": str(user.id)
-        }
-    }
+    result  = auth_service.login(
+        identifier=payload.identifier, 
+        password=payload.password
+    )
     
+    response = Response(
+        {
+            "id": result["id"],
+            "email": result["email"],
+            "full_name": result["full_name"],
+            "access_token": result["token"]["access_token"],
+        },
+        status=200
+    )
 
-@router.post("/login", response={200: UserOut, 400: dict})
-def login(request, data: LoginSchema):
-    if not data.identifier:
-        return 400, {'detail': "Thiếu thông tin đăng nhập"}
-    user, token, error = auth_service.login(identifier=data.identifier, password=data.password)
-    if error:
-        return 400, {"detail": error}
-
-    
-    access = token["access_token"]
-    refresh = token["refresh_token"]
-
-    response_data = {
-        "access_token": access,
-        "token_type": "bearer",
-        "user": {
-            "id": str(user.id),
-            "email": user.email,
-            "phone": user.phone,
-        }
-    }
-
-    response = JsonResponse(response_data)
     response.set_cookie(
         "refresh_token",
-        refresh,
+        result["token"]["refresh_token"],
         httponly=True,
         secure=False,
         samesite="Lax",
@@ -64,36 +74,46 @@ def login(request, data: LoginSchema):
     )
     return response
 
+@router.post("/google", response={200: GoogleLoginResponse, 401: dict})
+def login_with_google(request, payload: GoogleAuthRequest):
+    try:
+        result = auth_service.login_with_google(payload.token)
+        return {
+            "success": True,
+            "data": result
+        }
+    except Exception as e:
+        return 401, {"detail": str(e)}
+
+
 @router.post("/refresh", response={200: dict, 401: dict})
 def refresh(request):
-    refresh_token =  request.COOKIES.get("refresh_token")
-    
+    refresh_token = request.COOKIES.get("refresh_token")
     if not refresh_token:
         return 401, {"detail": "Không có refresh token"}
-    
-    new_access, error = auth_service.refresh_token(refresh_token)
 
-    if error:
-        return 401, {"detail": error}
-
-    return {
-        "access_token": new_access, 
-        "token_type": "bearer"
-    }
+    try:
+        new_access = auth_service.refresh_token(refresh_token)
+        return {
+            "token_type": "bearer",
+            "access_token": new_access
+        }
+    except ValidationError as e:
+        return 401, {"detail": str(e)}
 
 
 @router.post("/logout", response={200:dict, 400: dict})
 def logout(request, data: dict = None):
-    refresh_token = request.COOKIES.get("refresh_token")
+    try:
+        refresh_token = request.COOKIES.get("refresh_token")
+        auth_service.logout(refresh_token)
 
-    ok, error = auth_service.logout(refresh_token)
-
-    if error:
-        return 400, {"detail": error}
-
-    response = JsonResponse({"message": "Đăng xuất thành công"})
-
-    if request.COOKIES.get("refresh_token"):
+        response = Response(
+            {"message": "Đăng xuất thành công"},
+            status=200
+        )
         response.delete_cookie("refresh_token")
+        return response
 
-    return response
+    except Exception as e:
+        return 400, {"detail": str(e)}

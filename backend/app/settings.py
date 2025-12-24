@@ -190,6 +190,8 @@ CORS_ALLOW_ALL_ORIGINS = True
 # Cho phép gửi cookie/token (Quan trọng cho đăng nhập)
 CORS_ALLOW_CREDENTIALS = True
 
+# Google-auth
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 
 # --- CẤU HÌNH MEDIA ---
 USE_CLOUD = os.getenv('USE_CLOUD', 'False') == 'True'

@@ -1,7 +1,7 @@
 from ..models import Account, Role
 from ..enum.role_enum import RoleCode
 from ninja import ModelSchema, Schema
-from ..schemas.auth_schema import RegisterSchema
+from ..schemas.auth_schema import RegisterRequest
 from pydantic import field_validator
 from typing import List, Optional
 
@@ -17,7 +17,7 @@ class AccountSchema(ModelSchema):
         fields = ['id', 'email', 'phone', 'role', 'is_active', 'created_at']
         orm_mode = True
 
-class  AdminCreateAccountSchema(RegisterSchema):
+class  AdminCreateAccountSchema(RegisterRequest):
     role_code: RoleCode
 
 class AccountResponseSchema(Schema):

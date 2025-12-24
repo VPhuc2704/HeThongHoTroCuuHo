@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from app.models import Account, Role
+from app.models import Account, Role, SocialAccount
 from typing import Optional, List
 from django.db.models import Q
-from django.db import connection
+from django.db import connection, transaction
 from django.utils.dateparse import parse_datetime
 
 class IAccountRepo(ABC):
@@ -15,25 +15,32 @@ class IAccountRepo(ABC):
         pass
     
     @abstractmethod
-    def get_by_google_id(self, google_id: str) -> Optional[Account]:
-        pass
-
-    @abstractmethod
     def create(self, **kwargs) -> Account:
         pass
 
     @abstractmethod
-    def exits_by_email(self, email: str) -> bool:
+    def exists_by_email(self, email: str) -> bool:
         pass
     
     @abstractmethod
-    def exits_by_phone(self, phone: str) -> bool:
+    def exists_by_phone(self, phone: str) -> bool:
         pass
 
     @abstractmethod
     def get_all_accounts(self, *, limit: int, cursor: Optional[str]) -> List[Account]:
         pass
 
+    @abstractmethod
+    def get_by_social(self, provider: str, provider_id: str) -> Optional[Account]:
+        pass
+
+    @abstractmethod
+    def create_with_social(self, email: str, full_name: str, provider: str, provider_id: str, role) -> Account:
+        pass
+
+    @abstractmethod
+    def add_social_link(self, account: Account, provider: str, provider_id: str, email: str):
+        pass
 
 
 class AccountRepo(IAccountRepo):
@@ -75,21 +82,11 @@ class AccountRepo(IAccountRepo):
             role=role_instance,
         )
 
-    def get_by_google_id(self, google_id: str) -> Optional[Account]:
-        return Account.objects.filter(google_id=google_id).first()
 
-    def exits_by_email(self, email: str) -> bool:
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT 1
-                FROM accounts
-                WHERE email = %s
-                LIMIT 1 
-            """,[email])
-            row =  cursor.fetchone()
-        return row is not None
+    def exists_by_email(self, email: str) -> bool:
+        return Account.objects.filter(email=email).exists()
     
-    def exits_by_phone(self, phone: str) -> bool:
+    def exists_by_phone(self, phone: str) -> bool:
         return Account.objects.filter(phone=phone).exists()
 
     def get_by_id(self, account_id) -> Optional[Account]:
@@ -101,3 +98,40 @@ class AccountRepo(IAccountRepo):
         if cursor:
             qs = qs.filter(created_at__lt=parse_datetime(cursor))
         return list(qs[:limit]) 
+    
+    # --- SOCIAL LOGIN SECTION (Giữ nguyên vì đã chuẩn) ---
+    def get_by_social(self, provider: str, provider_id: str) -> Optional[Account]:
+        try:
+            social = SocialAccount.objects.select_related('account', 'account__role').get(
+                provider=provider, 
+                provider_id=provider_id
+            )
+            return social.account
+        except SocialAccount.DoesNotExist:
+            return None
+        
+    def create_with_social(self, email: str, full_name: str, provider: str, provider_id: str, role) -> Account:
+        with transaction.atomic():
+            account = Account.objects.create(
+                email=email,
+                full_name=full_name,
+                phone=None,
+                password_hash=None,
+                role=role,
+                is_active=True
+            )
+            SocialAccount.objects.create(
+                account=account,
+                provider=provider,
+                provider_id=provider_id,
+                email=email
+            )
+            return account
+
+    def add_social_link(self, account: Account, provider: str, provider_id: str, email: str):
+        SocialAccount.objects.get_or_create(
+            account=account,
+            provider=provider,
+            provider_id=provider_id,
+            defaults={'email': email}
+        )
