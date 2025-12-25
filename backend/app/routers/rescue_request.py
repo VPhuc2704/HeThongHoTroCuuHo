@@ -11,20 +11,17 @@ router = Router(tags=["Rescue Request"])
 rescue_service = RescueRequestService()
 condition_service = ConditionTypeService()
 
+auth_bearer = JWTBearer()
 
 # User gửi requets cứu hộ
-@router.post("/rescue")
+@router.post("/rescue", auth=auth_bearer)
 def create_rescue(request, data: RescueRequestSchema):
-    user_account = JwtProvider.get_user_from_jwt(request)
-    new_request = rescue_service.create_request(data, account=user_account)
-    return {
-        "id": str(new_request.code),
-        "status": new_request.status
-    }
+    account = request.auth 
+    new_request = rescue_service.create_request(data, account_id=str(account.id))
+    return new_request
 
-@router.post("/rescue/{rescue_id}/media")
+@router.post("/rescue/{rescue_id}/media", response={200: dict, 404: dict})
 def upload_rescue_media(request, rescue_id: str, files: List[UploadedFile] = File(...)):
-    """ BƯỚC 2: Gửi file (Chạy ngầm) """
     result = RescueRequestService.upload_media(rescue_id, files)
     if not result:
         return 404, {"message": "Không tìm thấy yêu cầu cứu hộ"}

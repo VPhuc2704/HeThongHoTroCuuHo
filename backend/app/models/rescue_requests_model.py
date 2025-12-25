@@ -18,8 +18,6 @@ class RescueRequest(TimeStampedModel):
     children = models.IntegerField(default=0)
     elderly = models.IntegerField(default=0)
     address = models.TextField()
-    latitude = models.FloatField()
-    longitude = models.FloatField()
     conditions = models.JSONField(default=list, blank=True)
     description = models.TextField()
     status = models.CharField(
@@ -30,12 +28,6 @@ class RescueRequest(TimeStampedModel):
 
     class Meta(TimeStampedModel.Meta, UnmanagedMeta):
         db_table = "rescue_requests"
-        indexes = [
-            # models.Index(fields=["code"]),
-            models.Index(fields=["created_at"], name='idx_created_at_desc'),
-            models.Index(fields=["latitude", "longitude"], name='idx_lat_lng'),
-            models.Index(fields=['status'], name='idx_status'),
-        ]
 
 class RescueMedia(TimeStampedModel):
     class MediaType(models.TextChoices):

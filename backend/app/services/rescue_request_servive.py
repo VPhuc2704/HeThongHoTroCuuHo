@@ -6,7 +6,7 @@ from django.db import transaction, connection
 from django.db.models import Q
 from django.utils import timezone
 from ninja import UploadedFile
-
+import json
 def dictfetchall(cursor):
     """
     Return all rows from a cursor as a dict
@@ -19,24 +19,62 @@ def dictfetchall(cursor):
 
 class RescueRequestService():
     @staticmethod
-    def create_request(data: RescueRequestSchema, account: Optional[Account] = None ) -> RescueRequest:
+    def create_request(data: RescueRequestSchema, account_id: Optional[str] = None ):
 
         payload = data.model_dump()  # chuyển Schema sang dict
 
+        lat = payload.pop("latitude")
+        lng = payload.pop("longitude")
+
         province_code = payload.pop('code', 'VN')
 
-        if account:
-            payload["account"] = account
+        if account_id:
+            payload["account_id"] = account_id
 
         with transaction.atomic():
             new_code = RescueRequestService._generate_code(province_code)
             payload['code'] = new_code
-            instance_request = RescueRequest.objects.create(**payload)
+            conditions = payload.get("conditions")
+
+            with connection.cursor() as cursor:
+                cursor.execute(""" 
+                    INSERT INTO rescue_requests (
+                                id, code, name,
+                                contact_phone, address, 
+                                adults, children, elderly, description, 
+                                conditions, location, account_id)
+                    VALUES( 
+                        gen_random_uuid(), %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s
+                    )
+                    RETURNING id, code , status
+                    """,
+                    [
+                        new_code,
+                        payload.get("name"),
+                        payload.get("contact_phone"),
+                        payload.get("address"),
+                        payload.get("adults"),
+                        payload.get("children"),
+                        payload.get("elderly"),
+                        payload.get("description"),
+                        json.dumps(conditions),  
+                        lng,
+                        lat,
+                        payload.get("account_id"),
+                    ]
+                )
+                request_id, code, status = cursor.fetchone()
+        return {
+            "id": request_id,
+            "code": code,
+            "status": status
+        }
             
             # --- Logic mở rộng ---
             # Ví dụ: Gửi thông báo socket realtime cho admin
             # notify_admin_new_request(instance)
-            return instance_request
+            # return instance_request
         
     def upload_media(request_id: str, files: List[UploadedFile]):
         try:

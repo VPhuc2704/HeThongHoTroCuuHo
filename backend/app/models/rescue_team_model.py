@@ -11,8 +11,6 @@ class RescueTeam(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     account = models.OneToOneField(Account,on_delete=models.CASCADE,related_name="rescue_team")
     name = models.CharField(max_length=255)
-    latitude = models.FloatField(null=True, blank=True)
-    longitude = models.FloatField(null=True, blank=True)
     contact_phone = models.CharField(max_length=20, null=True, blank=True)
     status = models.CharField(
         max_length=50,
@@ -21,13 +19,7 @@ class RescueTeam(TimeStampedModel):
     )
     class Meta(TimeStampedModel.Meta, UnmanagedMeta):
         db_table = "rescue_teams"
-        indexes = [
-            models.Index(
-                fields=['latitude', 'longitude'],
-                name='idx_avail_team_loc',
-                condition=Q(status='Sẵn sàng') 
-            )
-        ]
+
 
 class RescueAssignments(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -44,10 +36,3 @@ class RescueAssignments(TimeStampedModel):
     completed_at = models.DateTimeField(null=True, blank=True)
     class Meta:
         db_table = 'rescue_assignments'
-        constraints = [
-            #: Một cặp (Request + Team) chỉ được xuất hiện 1 lần
-            models.UniqueConstraint(
-                fields=['rescue_request', 'rescue_team'], 
-                name='unique_assignment_pair'
-            )
-        ]

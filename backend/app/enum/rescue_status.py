@@ -8,7 +8,7 @@ class RescueStatus(str, Enum):
     SAFE = "SAFE"      
 
 RESCUE_STATUS = {
-    RescueStatus.PENDING: "Chờ xữ lý",
+    RescueStatus.PENDING: "Chờ xử lý",
     RescueStatus.ASSIGNED: "Đã phân công",
     RescueStatus.IN_PROGRESS: "Đang thực hiện",
     RescueStatus.COMPLETED: "Hoàn thành",
