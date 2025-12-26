@@ -1,4 +1,4 @@
-from django.db import transaction
+from django.db import transaction, connection
 from django.http import Http404
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.db.models.expressions import RawSQL
@@ -39,6 +39,50 @@ class AssignService:
             request.save()
             return task
         
+    @staticmethod    
+    def find_nearest_teams(lat: float, lng: float, radius_km: float):
+        sql = """
+            SELECT id, name, contact_phone,
+                ST_Distance(location::geography, ST_MakePoint(%s, %s)::geography) AS distance_m
+            FROM rescue_teams
+            WHERE status = %s
+            AND ST_DWithin(location::geography, ST_MakePoint(%s, %s)::geography, %s)
+            ORDER BY distance_m
+        """
+        params = [lng, lat, TeamStatus.AVAILABLE, lng, lat, radius_km * 1000]
+
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+            result = []
+            for r in rows:
+                result.append({
+                    "id": r[0],
+                    "name": r[1],
+                    "contact_phone": r[2],
+                    "distance": round(r[3] / 1000, 2)
+                })
+        return result
+
+    
+    @staticmethod        
+    def get_assign(user):
+        """Lấy danh sách nhiệm vụ dựa trên Role"""
+        #Admin: Xem tất cả
+        if user.role.code == RoleCode.ADMIN:
+            return RescueAssignments.objects.select_related('rescue_request', 'rescue_team')\
+                .all().order_by('-created_at')
+        
+        if user.role.code == RoleCode.RESCUER:
+            try:
+                team = RescueTeam.objects.get(account=user)
+                return RescueAssignments.objects.select_related('rescue_request')\
+                    .filter(rescue_team=team).order_by('-created_at')
+            except RescueTeam.DoesNotExist:
+                return []
+        return []
+            
+        
     @staticmethod
     def _get_team_task(assignment_id, account_id, required_status):
         """Hàm phụ trợ để lấy và kiểm tra task của đội"""
@@ -62,12 +106,12 @@ class AssignService:
         with transaction.atomic():
             task = AssignService._get_team_task(assignment_id, account_id, TaskStatus.ASSIGNED)
             
-            # Update Task
+            # cập nhật task 
             task.status = TaskStatus.IN_PROGRESS
             task.accepted_at = timezone.now()
             task.save()
 
-            # ĐỒNG BỘ: Update Rescue Request -> IN_PROGRESS
+            # ĐỒNG BỘ: cập nhật Rescue Request -> IN_PROGRESS
             # Để người dân thấy trạng thái đổi sang "Đang thực hiện"
             rescue_req = task.rescue_request
             rescue_req.status = RescueStatus.IN_PROGRESS
@@ -117,64 +161,3 @@ class AssignService:
             rescue_req.save()
 
             return task
-        
-    @staticmethod    
-    def find_nearest_teams(lat:float, long: float, radius_km: float):
-        
-        offset = (radius_km / 111.0) * 1.1
-
-        min_lat = lat - offset
-        max_lat = lat + offset
-        min_long = long - offset
-        max_long = long + offset
-
-        haversine_formula = """
-            6371* acos(
-                least(1.0, greatest(-1.0, 
-                    cos(radians(%s)) * cos(radians(latitude)) * cos(radians(longitude) - radians(%s)) + 
-                    sin(radians(%s)) * sin(radians(latitude))
-                ))
-            )
-        """
-
-        teams = RescueTeam.objects.filter(
-            status=TeamStatus.AVAILABLE,
-            latitude__gte=min_lat,
-            latitude__lte=max_lat,
-            longitude__gte=min_long,
-            longitude__lte=max_long
-        ).annotate(
-            distance=RawSQL(haversine_formula, (lat, long, lat))
-        ).filter(
-            distance__lte=radius_km 
-        ).order_by("distance")
-
-        raw_data =  list(teams.values(
-            "id", "name", "contact_phone", "distance"
-        ))
-
-        for team in raw_data:
-            if team["distance"] is not None:
-                team["distance"] = round(team["distance"], 2)
-            else: team["distance"] = 0.0
-        
-        return raw_data
-    
-    @staticmethod        
-    def get_assign(user):
-        """Lấy danh sách nhiệm vụ dựa trên Role"""
-        #Admin: Xem tất cả
-        if user.role.code == RoleCode.ADMIN:
-            return RescueAssignments.objects.select_related('rescue_request', 'rescue_team')\
-                .all().order_by('-created_at')
-        
-        #Đội cứu hộ: Xem nhiệm vụ của chính mình
-        if user.role.code == RoleCode.RESCUER:
-            try:
-                team = RescueTeam.objects.get(account=user)
-                return RescueAssignments.objects.select_related('rescue_request')\
-                    .filter(rescue_team=team).order_by('-created_at')
-            except RescueTeam.DoesNotExist:
-                return []
-        return []
-            
