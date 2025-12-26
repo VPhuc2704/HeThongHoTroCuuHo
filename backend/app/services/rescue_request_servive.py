@@ -21,7 +21,7 @@ class RescueRequestService():
     @staticmethod
     def create_request(data: RescueRequestSchema, account_id: Optional[str] = None ):
 
-        payload = data.model_dump()  # chuyển Schema sang dict
+        payload = data.model_dump()
 
         lat = payload.pop("latitude")
         lng = payload.pop("longitude")
@@ -110,10 +110,11 @@ class RescueRequestService():
         sql = f"""
             SELECT 
                 r.id, r.code ,r.name, r.contact_phone, r.address, r.status, r.created_at, 
-                r.latitude, r.longitude, r.conditions,
-                r.adults, r.children, r.elderly,
+                ST_Y(r.location) AS latitude,
+                ST_X(r.location) AS longitude,
+                r.conditions, r.adults, r.children, r.elderly,
                 
-                LEFT(COALESCE(r.description, ''), 50) as description_short,
+                LEFT(COALESCE(r.description, ''), 100) as description_short,
                 
                 -- Summary số người
                 CASE 
@@ -145,8 +146,8 @@ class RescueRequestService():
                         'updated_at', a.updated_at,
                         'team_name', t.name,
                         'team_phone', t.contact_phone,
-                        'team_lat', t.latitude, 
-                        'team_lng', t.longitude
+                        'team_lat', ST_Y(t.location),
+                        'team_lng', ST_X(t.location)
                     )
                     FROM rescue_assignments a
                     JOIN rescue_teams t ON a.rescue_team_id = t.id
@@ -228,32 +229,76 @@ class RescueRequestService():
 
         # 3. Thực thi
         return cls._execute_search_query(conditions, params, page, size)
-        
     
     @staticmethod
-    def get_map_points(min_lat: float, max_lat: float, 
-                       min_lng: float, max_lng: float, 
-                       zoom: int):
+    def _calculate_grid_size(min_lng: float, max_lng: float, zoom: int) -> float:
         """
-        Lấy danh sách điểm cứu hộ tối ưu theo khung nhìn và độ zoom.
+        Tính grid size theo viewport và zoom.
+        - zoom cao → grid nhỏ
+        - zoom thấp → grid lớn
         """
-        # 1. Logic nghiệp vụ: Tính toán Limit dựa trên Zoom
-        limit = 500         # Mặc định (Zoom xa - Toàn quốc)
-        if zoom >= 14:      # Zoom rất gần (Cấp Phường/Xã)
-            limit = 5000     
-        elif zoom >= 10:    # Zoom vừa (Cấp Quận/Huyện)
-            limit = 2000
-            
-        qs = RescueRequest.objects.filter(
-            latitude__gte=min_lat, latitude__lte=max_lat,
-            longitude__gte=min_lng, longitude__lte=max_lng
-        ).values(
-            'id', 'latitude', 'longitude', 'status', "code" 
-        ).order_by('-created_at')[:limit]
+        # Nếu zoom rất gần → trả điểm thật
+        if zoom >= 15:
+            return 0
+        
+        # Chiều rộng viewport (degrees longitude)
+        lng_span = max_lng - min_lng
+        num_cells = max(1, 50 - zoom*2)  # số ô thay đổi theo zoom
+        grid_deg = lng_span / num_cells
 
-        # Trả về list dictionary
-        return list(qs)
+        # Chuyển sang meters (approx) để dùng ST_SnapToGrid 3857
+        # 1 độ longitude ~ 111_320 m tại xích đạo, dùng xấp xỉ
+        grid_meters = grid_deg * 111_320
+        return grid_meters
     
+    @classmethod
+    def get_map_points(cls, min_lat: float, max_lat: float,
+                       min_lng: float, max_lng: float,
+                       zoom: int) -> List[Dict[str, Any]]:
+
+        grid_size = cls._calculate_grid_size(min_lng, max_lng, zoom)
+        base_params = {"min_lat": min_lat, "max_lat": max_lat, "min_lng": min_lng, "max_lng": max_lng}
+
+        if grid_size == 0:
+            sql = """
+                SELECT
+                    r.id, r.code, r.status,
+                    ST_Y(r.location) AS latitude,
+                    ST_X(r.location) AS longitude
+                FROM rescue_requests r
+                WHERE r.location && ST_MakeEnvelope(
+                    %(min_lng)s, %(min_lat)s,
+                    %(max_lng)s, %(max_lat)s,
+                    4326
+                )
+                ORDER BY r.created_at DESC
+            """
+            params = base_params
+        else:
+            sql = """
+                SELECT
+                    ST_Y(ST_Transform(ST_Centroid(ST_Collect(r.location)), 4326)) AS latitude,
+                    ST_X(ST_Transform(ST_Centroid(ST_Collect(r.location)), 4326)) AS longitude,
+                    COUNT(*) AS total,
+                    json_agg(r.id) AS ids
+                FROM rescue_requests r
+                WHERE r.location && ST_MakeEnvelope(
+                    %(min_lng)s, %(min_lat)s,
+                    %(max_lng)s, %(max_lat)s,
+                    4326
+                )
+                GROUP BY ST_SnapToGrid(
+                    ST_Transform(r.location, 3857),
+                    %(grid_size)s
+                )
+            """
+            params = {**base_params, "grid_size": grid_size}
+
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            return dictfetchall(cursor)
+    
+
     @staticmethod
     def _generate_code(province_code: str) -> str:
         """

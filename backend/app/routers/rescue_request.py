@@ -1,9 +1,9 @@
 from ninja import Router
-from app.schemas.rescue_schema import RescueRequestSchema, ConditionTypeOutSchema, ConditionTypeSchema, RescueMapPoint, PaginatedRescueResponse
+from app.schemas.rescue_schema import RescueRequestSchema, ConditionTypeOutSchema, ConditionTypeSchema, RescueMapPoint, PaginatedRescueResponse, RescueMapPointCluster
 from app.services import RescueRequestService, ConditionTypeService
 from app.security.jwt_provider import JwtProvider
 from app.middleware.auth import JWTBearer
-from typing import List, Optional
+from typing import List, Optional, Union
 from ninja import UploadedFile, File
 
 router = Router(tags=["Rescue Request"])
@@ -45,21 +45,25 @@ def list_my_requests(request, page: int = 1, size: int = 20, status: str = None,
     )
 
 
-@router.get("/map-points", response=List[RescueMapPoint])
+@router.get("/map-points", response=List[Union[RescueMapPoint, RescueMapPointCluster]])
 def get_map_points(request, 
                    min_lat: float, max_lat: float, 
                    min_lng: float, max_lng: float,
                    zoom: int):
-
+    
     map_points = RescueRequestService.get_map_points(
         min_lat=min_lat,
-        max_lat=max_lat,                                             
+        max_lat=max_lat,
         min_lng=min_lng,
         max_lng=max_lng,
         zoom=zoom
     )
+
+    if zoom > 14:
+        return [RescueMapPoint(**p) for p in map_points]
+    else:
+        return [RescueMapPointCluster(**p) for p in map_points]
     
-    return map_points
 
 
 @router.get("/requests", response=PaginatedRescueResponse)

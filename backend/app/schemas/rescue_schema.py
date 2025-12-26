@@ -51,6 +51,12 @@ class RescueMapPoint(Schema):
     status: str
     code:str
 
+class RescueMapPointCluster(Schema):
+    latitude: float
+    longitude: float
+    total: int
+    ids: Optional[List[str]] = None 
+
 class ActiveAssignmentSchema(Schema):
     task_id: uuid.UUID
     status: str
