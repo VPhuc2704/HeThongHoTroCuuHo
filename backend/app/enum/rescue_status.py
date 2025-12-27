@@ -25,3 +25,10 @@ class TeamStatus(str, Enum):
     AVAILABLE = 'Sẵn sàng'
     BUSY      = 'Đang bận'
     OFFLINE   = 'Ngoại tuyến'
+
+
+class TeamType(str, Enum):
+    FIRE    = 'CỨU HỎA'
+    MEDICAL = 'Y TẾ'
+    POLICE  = 'CÔNG AN'
+    RESCUE  = 'CỨU HỘ'

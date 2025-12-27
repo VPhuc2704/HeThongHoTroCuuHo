@@ -114,17 +114,28 @@ class RescueRequestTableRow(Schema):
 
 class RescueTeamOut(Schema):
     id: uuid.UUID
-    name: str
+    unit_name: str
+    leader_name: str
     latitude: Optional[float]
     longitude: Optional[float]
     contact_phone: Optional[str]
     status: str
+    hotline:  Optional[str]
+    team_type:  Optional[str]
+    address: str 
+    primary_area: str 
+    created_at: datetime
 
 class RescueTeamUpdate(Schema):
-    name: Optional[str] = None
+    unit_name: Optional[str] = None
+    leader_name: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     contact_phone: Optional[str] = None
+    hotline: Optional[str] = None
+    team_type: Optional[str] = None
+    address: Optional[str] = None 
+    primary_area: Optional[str] = None
 
 class ConditionTypeSchema(Schema):
     name: str

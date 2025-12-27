@@ -49,7 +49,10 @@ class AccountService(IAccountService):
                 self.rescue_team_repo.create(
                     account=account,
                     name=f"Đội cứu hộ của {phone }",
-                    contact_phone=phone
+                    leader_name=full_name,
+                    contact_phone=phone,
+                    hotline=phone,
+                    team_type='CỨU HỘ'
             )
     
         return account

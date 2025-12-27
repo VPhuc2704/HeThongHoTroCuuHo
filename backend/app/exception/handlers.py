@@ -16,12 +16,28 @@ def global_exception_handlers(api: NinjaAPI):
     
     @api.exception_handler(ValidationError)
     def handle_validation_error(request, exc):
-        raw_errors = exc.errors
+        if callable(getattr(exc, 'errors', None)):
+            raw_errors = exc.errors() # Pydantic V2
+        elif hasattr(exc, 'errors'):
+            raw_errors = exc.errors   # Ninja/Pydantic V1
+        else:
+            raw_errors = str(exc)     # Fallback
+
+        # --- FIX LỖI Ở ĐÂY: CHẶN VIỆC TÁCH TỪNG CHỮ CÁI ---
+        # Nếu raw_errors là String, bọc nó vào List ngay lập tức
+        if isinstance(raw_errors, str):
+            raw_errors = [raw_errors]
+
         clean_details = []
         for error in raw_errors:
-            loc = error.get('loc', [])
-            field = str(loc[-1]) if loc else 'general'
-            msg = error.get('msg', '').replace('Value error, ', '')
+            if isinstance(error, dict):
+                loc = error.get('loc', [])
+                field = str(loc[-1]) if loc else 'general'
+                msg = error.get('msg', '').replace('Value error, ', '')
+            else:
+
+                field = 'general'
+                msg = str(error)
             
             clean_details.append({
                 "field": field,

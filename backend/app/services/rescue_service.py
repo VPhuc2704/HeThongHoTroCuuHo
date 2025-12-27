@@ -7,10 +7,11 @@ from app.enum.role_enum import RoleCode
 
 class RescueService:
     
-    def get_teams(user):
+    def get_teams(user) -> RescueTeamOut:
         if user.role.code == RoleCode.ADMIN:
             sql = """
-                SELECT id, name , contact_phone, status,
+                SELECT id, name , leader_name, contact_phone, hotline, 
+                        team_type, address, primary_area, status, created_at,
                         ST_X(location) AS longitude, 
                         ST_Y(location) AS latitude
                 FROM rescue_teams
@@ -19,16 +20,15 @@ class RescueService:
             with connection.cursor() as cursor:
                 cursor.execute(sql=sql)
                 rows = cursor.fetchall()
+                
+                column = [col[0] for col in cursor.description]
                 result = []
-                for r in rows:
-                    result.append({
-                        "id": r[0],
-                        "name": r[1],
-                        "contact_phone": r[2],
-                        "status": r[3],
-                        "longitude": float(r[4]) if r[4] is not None else None,
-                        "latitude": float(r[5]) if r[5] is not None else None,
-                    })
+
+                for row in rows:
+                    row_dict = dict(zip(column, row))
+
+                    result.append(RescueTeamOut(**row_dict))
+
             return result
         
 
@@ -51,47 +51,47 @@ class RescueService:
         updates = []
         values = []
 
+        lat = data.pop("latitude", None)
+        lng = data.pop("longitude", None)
+        if lat is not None and lng is not None:
+            try:
+                updates.append("location = ST_SetSRID(ST_MakePoint(%s, %s), 4326)")
+                values.extend([lng, lat])
+            except (TypeError, ValueError):
+                raise ValueError("latitude và longitude phải là số hợp lệ")
+
+        for field, value in data.items():
+            updates.append(f"{field} = %s")
+            values.append(value)
+
+        if not updates:
+            return None
+
+        values.append(team_id)
+        sql = f"""
+            UPDATE rescue_teams
+            SET {', '.join(updates)}
+            WHERE id = %s
+            RETURNING id, name , leader_name, contact_phone, hotline, 
+                    team_type, address, primary_area, status, created_at,
+                    ST_X(location) AS longitude, 
+                    ST_Y(location) AS latitude;
+        """
 
         with connection.cursor() as cursor:
-            lat = data.pop("latitude", None)
-            lng = data.pop("longitude", None)
-            if lat is not None and lng is not None:
-                try:
-                    updates.append("location = ST_SetSRID(ST_MakePoint(%s, %s), 4326)")
-                    values.extend([lng, lat])
-                except (TypeError, ValueError):
-                    raise ValueError("latitude và longitude phải là số hợp lệ")
-
-            for field, value in data.items():
-                updates.append(f"{field} = %s")
-                values.append(value)
-
-            if not updates:
-                return None
-
-            values.append(team_id)
-            sql = f"""
-                UPDATE rescue_teams
-                SET {', '.join(updates)}
-                WHERE id = %s
-                RETURNING id, name, contact_phone, status,
-                        ST_X(location) AS longitude, ST_Y(location) AS latitude;
-            """
             cursor.execute(sql, values)
 
-            print("SQL:", sql)
             updated_team = cursor.fetchone()
 
             if not updated_team:
                 return None
+            
+            columns = [col[0] for col in cursor.description]
+
+            row_dict = dict(zip(columns, updated_team))
 
             return RescueTeamOut(
-                id=updated_team[0],
-                name=updated_team[1],
-                contact_phone=updated_team[2],
-                status=updated_team[3],
-                longitude=float(updated_team[4]) if updated_team[4] is not None else None,
-                latitude=float(updated_team[5]) if updated_team[5] is not None else None
+                **row_dict
             )
 
 
