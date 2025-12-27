@@ -27,14 +27,12 @@ class AccountService(IAccountService):
         self.rescue_team_repo = rescue_team_repo or RescueTeamRepo()
         
 
-    def create_account(self, *, phone=None, email=None, role_code: str):
-        if not phone and not email:
+    def create_account(self, *, phone= None, full_name= None, password= None, role_code: str):
+        if not phone:
             raise ValidationError("Phải có phone hoặc email")
         
-        if phone and self.account_repo.exits_by_phone(phone=phone):
+        if phone and self.account_repo.exists_by_phone(phone=phone):
             raise ValidationError(f"Phone {phone} đã tồn tại")
-        if email and self.account_repo.exits_by_email(email=email):
-            raise ValidationError(f"Email {email} đã tồn tại")
 
         try:
             role = self.role_repo.get_by_code(code=role_code)
@@ -43,14 +41,14 @@ class AccountService(IAccountService):
         with transaction.atomic():
             account = self.account_repo.create(
                 phone=phone,
-                email=email,
+                full_name=full_name,
                 role=role,
-                password_hash=jwt_provider.hash_password("123456"),
+                password_hash=jwt_provider.hash_password(password),
             )
             if role.code == RoleCode.RESCUER.value:
                 self.rescue_team_repo.create(
                     account=account,
-                    name=f"Đội cứu hộ của {phone or email}",
+                    name=f"Đội cứu hộ của {phone }",
                     contact_phone=phone
             )
     

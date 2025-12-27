@@ -14,12 +14,13 @@ auth_bearer = JWTBearer()
 @router.post("/admin/accounts", auth= auth_bearer, response={201: AccountResponseSchema, 400: dict})
 @require_role(RoleCode.ADMIN)
 def admin_create_account(request, data: AdminCreateAccountSchema):
-    if not data.email and not data.phone:
+    if not data.phone:
         return 400, {'detail': "Thiếu thông tin tao tai khoan"}
     try:
         account = account_service.create_account(
+            full_name=data.full_name,
             phone=data.phone,
-            email=data.email,
+            password=data.password,
             role_code=data.role_code
         )
     except ValidationError as e:
