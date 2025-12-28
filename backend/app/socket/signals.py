@@ -10,21 +10,25 @@ def broadcast_new_request(sender, instance, created, **kwargs):
     if created:
         channel_layer = get_channel_layer()
 
-        data = {
-            "type": "send_update", 
-            "data": {
-                "event": "NEW_REQUEST", # Frontend dựa vào field này để if/else
-                "id": str(instance.id),
-                "latitude": instance.latitude,
-                "longitude": instance.longitude,
-                "status": instance.status,
-                "address": instance.address,
-                "time": str(instance.created_at)
-            }
+        data_payload = {
+            "id": instance.id,
+            "latitude": instance.latitude,
+            "longitude": instance.longitude,
+            "status": instance.status,
+            "address": instance.address,
+            "time": instance.created_at,
+            "code": instance.code, # Thêm code nếu model có
+            "name": instance.name  # Thêm name
         }
 
-        # CHỈ GỬI CHO ADMIN (User thường không cần thấy yêu cầu của người khác)
+        # Gửi vào group 'rescue_admin' (Đã đồng bộ)
         async_to_sync(channel_layer.group_send)(
-            "rescue_map_admin", 
-            data
+            "rescue_admin", 
+            {
+                "type": "send_update",
+                "data": {
+                    "event": "NEW_REQUEST", # Khớp với switch case ở Frontend
+                    "data": data_payload    # Khớp với destructuring { data }
+                }
+            }
         )
