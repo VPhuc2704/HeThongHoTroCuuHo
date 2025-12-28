@@ -1,3 +1,4 @@
+from typing import List
 from app.models import RescueTeam
 from django.db import transaction, connection
 from app.schemas.rescue_schema import RescueTeamUpdate, RescueTeamOut
@@ -7,7 +8,7 @@ from app.enum.role_enum import RoleCode
 
 class RescueService:
     
-    def get_teams(user) -> RescueTeamOut:
+    def get_teams(user) -> List[RescueTeamOut]:
         if user.role.code == RoleCode.ADMIN:
             sql = """
                 SELECT id, name , leader_name, contact_phone, hotline, 
@@ -18,16 +19,21 @@ class RescueService:
                 ORDER BY created_at DESC;
             """ 
             with connection.cursor() as cursor:
-                cursor.execute(sql=sql)
+                cursor.execute(sql)
                 rows = cursor.fetchall()
                 
-                column = [col[0] for col in cursor.description]
-                result = []
+                columns = [col[0] for col in cursor.description]
 
-                for row in rows:
-                    row_dict = dict(zip(column, row))
+            result = []
 
-                    result.append(RescueTeamOut(**row_dict))
+            for row in rows:
+                row_dict = {}
+                for index in range(len(columns)):
+                    column_name = columns[index]
+                    row_dict[column_name] = row[index]
+
+                team = RescueTeamOut(**row_dict)
+                result.append(team)
 
             return result
         

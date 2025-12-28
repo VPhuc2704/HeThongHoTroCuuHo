@@ -6,6 +6,8 @@ from django.utils import timezone
 from ..models import RescueRequest, RescueTeam, RescueAssignments
 from ..enum.rescue_status import TeamStatus, TaskStatus, RescueStatus, RESCUE_STATUS
 from ..enum.role_enum import RoleCode
+import json
+
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -24,6 +26,15 @@ class AssignService:
         except Exception as e:
             print(f"Socket Error: {e}")
 
+    @staticmethod
+    def _build_permission(user):
+        if user.role.code == RoleCode.ADMIN:
+            return "", []
+        if user.role.code == RoleCode.RESCUER:
+            return "WHERE rt.account_id = %s", [user.id]
+        else:
+            return "WHERE 1=0", []
+        
     @staticmethod
     def assign_task(request_id: str, team_id: str, admin_id: str):
         with transaction.atomic():
@@ -69,7 +80,6 @@ class AssignService:
             )
             return task
         
-            return task
         
     @staticmethod    
     def find_nearest_teams(lat: float, lng: float, radius_km: float):
@@ -101,19 +111,94 @@ class AssignService:
     @staticmethod        
     def get_assign(user):
         """Lấy danh sách nhiệm vụ dựa trên Role"""
-        #Admin: Xem tất cả
-        if user.role.code == RoleCode.ADMIN:
-            return RescueAssignments.objects.select_related('rescue_request', 'rescue_team')\
-                .all().order_by('-created_at')
-        
-        if user.role.code == RoleCode.RESCUER:
-            try:
-                team = RescueTeam.objects.get(account=user)
-                return RescueAssignments.objects.select_related('rescue_request')\
-                    .filter(rescue_team=team).order_by('-created_at')
-            except RescueTeam.DoesNotExist:
-                return []
-        return []
+
+        where_clause, params = AssignService._build_permission(user)
+
+        BASE_ASSIGNMENT_SQL = """
+            SELECT
+                ra.id              AS assignment_id,
+                ra.status,
+                ra.assigned_at,
+
+                -- rescue request
+                rr.code,
+                rr.name,
+                rr.contact_phone,
+                rr.adults,
+                rr.children,
+                rr.elderly,
+                rr.address,
+                ST_Y(rr.location)  AS latitude,
+                ST_X(rr.location)  AS longitude,
+                rr.conditions,
+                rr.description,
+
+                -- rescue team
+                rt.id              AS team_id,
+                rt.name            AS team_name,
+                rt.hotline         AS team_phone,
+                ST_Y(rt.location)  AS team_latitude,
+                ST_X(rt.location)  AS team_longitude
+
+            FROM rescue_assignments ra
+            JOIN rescue_requests rr ON rr.id = ra.rescue_request_id
+            JOIN rescue_teams rt ON rt.id = ra.rescue_team_id
+        """
+        sql = f"""
+            {BASE_ASSIGNMENT_SQL}
+            {where_clause}
+            ORDER BY ra.created_at DESC
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(sql=sql, params=params)
+
+            rows = cursor.fetchall()
+            
+            columns = [col[0] for col in cursor.description]
+            result = []
+            
+            for row in rows:
+                row_dict = dict(zip(columns, row))
+
+                result.append(AssignService.map_assignment(row_dict))
+            return result
+    
+    @staticmethod   
+    def map_assignment(row: dict) -> dict:
+
+        conditions = row["conditions"]
+
+        if isinstance(conditions, str):
+            conditions = json.loads(conditions)
+
+        return {
+            "id": row["assignment_id"],
+            "status": row["status"],
+            "assigned_at": row["assigned_at"],
+
+            "rescue_request": {
+                "code": row["code"],
+                "name": row["name"],
+                "contact_phone": row["contact_phone"],
+                "adults": row["adults"],
+                "children": row["children"],
+                "elderly": row["elderly"],
+                "address": row["address"],
+                "latitude": row["latitude"],
+                "longitude": row["longitude"],
+                "conditions": conditions,
+                "description": row["description"],
+            },
+
+            "rescue_team": {
+                "team_id": row["team_id"],
+                "team_name": row["team_name"],
+                "team_latitude": row["team_latitude"],
+                "team_longitude": row["team_longitude"],
+                "team_phone": row["team_phone"],
+            }
+        }
+
             
         
     @staticmethod
@@ -147,7 +232,7 @@ class AssignService:
             # ĐỒNG BỘ: cập nhật Rescue Request -> IN_PROGRESS
             # Để người dân thấy trạng thái đổi sang "Đang thực hiện"
             rescue_req = task.rescue_request
-            rescue_req.status = RescueStatus.IN_PROGRESS
+            rescue_req.status = RESCUE_STATUS[RescueStatus.IN_PROGRESS]
             rescue_req.save(update_fields=['status'])
             
             AssignService._push_update(
@@ -209,7 +294,7 @@ class AssignService:
 
             # Kết thúc Yêu cầu -> COMPLETED
             rescue_req = task.rescue_request
-            rescue_req.status = RescueStatus.COMPLETED
+            rescue_req.status = RESCUE_STATUS[RescueStatus.COMPLETED]
             rescue_req.save()
 
             AssignService._push_update(
