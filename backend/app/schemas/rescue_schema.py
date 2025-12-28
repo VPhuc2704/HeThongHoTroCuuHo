@@ -114,7 +114,7 @@ class RescueRequestTableRow(Schema):
 
 class RescueTeamOut(Schema):
     id: uuid.UUID
-    unit_name: str
+    name: str
     leader_name: str
     latitude: Optional[float]
     longitude: Optional[float]
@@ -127,7 +127,7 @@ class RescueTeamOut(Schema):
     created_at: datetime
 
 class RescueTeamUpdate(Schema):
-    unit_name: Optional[str] = None
+    name: Optional[str] = None
     leader_name: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None

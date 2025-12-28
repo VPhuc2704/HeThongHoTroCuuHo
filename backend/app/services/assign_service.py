@@ -7,7 +7,23 @@ from ..models import RescueRequest, RescueTeam, RescueAssignments
 from ..enum.rescue_status import TeamStatus, TaskStatus, RescueStatus, RESCUE_STATUS
 from ..enum.role_enum import RoleCode
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+
 class AssignService:
+
+    @staticmethod
+    def _push_update(groups: list, data: dict):
+        """Helper gửi socket an toàn"""
+        channel_layer = get_channel_layer()
+        try:
+            for group in groups:
+                async_to_sync(channel_layer.group_send)(
+                    group, {"type": "send_update", "data": data}
+                )
+        except Exception as e:
+            print(f"Socket Error: {e}")
+
     @staticmethod
     def assign_task(request_id: str, team_id: str, admin_id: str):
         with transaction.atomic():
@@ -33,10 +49,26 @@ class AssignService:
             )
 
             team.status= TeamStatus.BUSY
-            team.save()
+            team.save(update_fields=['status'])
 
             request.status= RESCUE_STATUS[RescueStatus.ASSIGNED]
-            request.save()
+            request.save(update_fields=['status'])
+
+            # Socket Notification
+            data = {
+                "type": "NEW_TASK",
+                "task_id": str(task.id),
+                "request_id": str(request.id),
+                "team_id": str(team.id),
+                "msg": f"Bạn có nhiệm vụ mới tại {request.address}"
+            }
+            # Bắn tin cho Admin và Đội cứu hộ đó
+            AssignService._push_update(
+                groups=["rescue_admin", f"rescue_team_{team.id}"], 
+                data=data
+            )
+            return task
+        
             return task
         
     @staticmethod    
@@ -54,14 +86,15 @@ class AssignService:
         with connection.cursor() as cursor:
             cursor.execute(sql, params)
             rows = cursor.fetchall()
-            result = []
-            for r in rows:
-                result.append({
-                    "id": r[0],
-                    "name": r[1],
-                    "contact_phone": r[2],
-                    "distance": round(r[3] / 1000, 2)
-                })
+
+        result = []
+        for r in rows:
+            result.append({
+                "id": r[0],
+                "name": r[1],
+                "contact_phone": r[2],
+                "distance": round(r[3] / 1000, 2)
+            })
         return result
 
     
@@ -109,13 +142,22 @@ class AssignService:
             # cập nhật task 
             task.status = TaskStatus.IN_PROGRESS
             task.accepted_at = timezone.now()
-            task.save()
+            task.save(update_fields=['status'])
 
             # ĐỒNG BỘ: cập nhật Rescue Request -> IN_PROGRESS
             # Để người dân thấy trạng thái đổi sang "Đang thực hiện"
             rescue_req = task.rescue_request
             rescue_req.status = RescueStatus.IN_PROGRESS
-            rescue_req.save()
+            rescue_req.save(update_fields=['status'])
+            
+            AssignService._push_update(
+                groups=["rescue_admin", f"rescue_req_{rescue_req.id}"],
+                data={
+                    "type": "TASK_UPDATE", 
+                    "task_id": str(task.id), 
+                    "status": "IN_PROGRESS"
+                }
+            )
 
             return task
         
@@ -126,8 +168,18 @@ class AssignService:
             task = AssignService._get_team_task(assignment_id, account_id, TaskStatus.IN_PROGRESS)
             
             task.status = TaskStatus.ARRIVED
-            task.save()
+            task.save(update_fields=['status'])
             
+            AssignService._push_update(
+                groups=["rescue_admin", f"rescue_req_{task.rescue_request.id}"],
+                data={
+                    "type": "TASK_UPDATE", 
+                    "task_id": str(task.id), 
+                    "status": "ARRIVED", 
+                    "msg": "Đội cứu hộ đã đến vị trí!"
+                }
+            )
+
             return task
     
     @staticmethod
@@ -159,5 +211,15 @@ class AssignService:
             rescue_req = task.rescue_request
             rescue_req.status = RescueStatus.COMPLETED
             rescue_req.save()
+
+            AssignService._push_update(
+                groups=["rescue_admin", f"rescue_team_{team.id}", f"rescue_req_{rescue_req.id}"],
+                data={
+                    "type": "TASK_COMPLETED", 
+                    "task_id": str(task.id), 
+                    "request_id": str(rescue_req.id),
+                    "status": "COMPLETED"
+                }
+            )
 
             return task

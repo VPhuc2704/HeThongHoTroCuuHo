@@ -14,7 +14,7 @@ class AccountSchema(ModelSchema):
     role: RoleSchema
     class Meta:
         model = Account
-        fields = ['id', 'email', 'phone', 'role', 'is_active', 'created_at']
+        fields = ['id', 'email', 'full_name', 'phone', 'role', 'is_active', 'created_at']
         orm_mode = True
 
 class  AdminCreateAccountSchema(RegisterRequest):

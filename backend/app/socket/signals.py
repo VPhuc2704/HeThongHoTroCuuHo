@@ -11,16 +11,20 @@ def broadcast_new_request(sender, instance, created, **kwargs):
         channel_layer = get_channel_layer()
 
         data = {
-            "type":"send_new_coordinate",
-            "data":{
-                "id":str(instance.id),
+            "type": "send_update", 
+            "data": {
+                "event": "NEW_REQUEST", # Frontend dựa vào field này để if/else
+                "id": str(instance.id),
                 "latitude": instance.latitude,
                 "longitude": instance.longitude,
-                "status": instance.status
+                "status": instance.status,
+                "address": instance.address,
+                "time": str(instance.created_at)
             }
         }
 
+        # CHỈ GỬI CHO ADMIN (User thường không cần thấy yêu cầu của người khác)
         async_to_sync(channel_layer.group_send)(
-            "rescue_map_group",
+            "rescue_map_admin", 
             data
         )
