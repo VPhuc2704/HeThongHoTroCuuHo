@@ -8,7 +8,7 @@ class RescueStatus(str, Enum):
     SAFE = "SAFE"      
 
 RESCUE_STATUS = {
-    RescueStatus.PENDING: "Chờ xữ lý",
+    RescueStatus.PENDING: "Chờ xử lý",
     RescueStatus.ASSIGNED: "Đã phân công",
     RescueStatus.IN_PROGRESS: "Đang thực hiện",
     RescueStatus.COMPLETED: "Hoàn thành",
@@ -25,3 +25,10 @@ class TeamStatus(str, Enum):
     AVAILABLE = 'Sẵn sàng'
     BUSY      = 'Đang bận'
     OFFLINE   = 'Ngoại tuyến'
+
+
+class TeamType(str, Enum):
+    FIRE    = 'CỨU HỎA'
+    MEDICAL = 'Y TẾ'
+    POLICE  = 'CÔNG AN'
+    RESCUE  = 'CỨU HỘ'

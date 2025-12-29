@@ -3,7 +3,7 @@ from django.db.models import Q
 from .base_model import TimeStampedModel
 from .account_model import Account
 from .unmanaged_meta import UnmanagedMeta
-from ..enum.rescue_status import TaskStatus, TeamStatus
+from ..enum.rescue_status import TaskStatus, TeamStatus, TeamType
 from .rescue_requests_model import RescueRequest
 import uuid
 
@@ -11,23 +11,23 @@ class RescueTeam(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     account = models.OneToOneField(Account,on_delete=models.CASCADE,related_name="rescue_team")
     name = models.CharField(max_length=255)
-    latitude = models.FloatField(null=True, blank=True)
-    longitude = models.FloatField(null=True, blank=True)
-    contact_phone = models.CharField(max_length=20, null=True, blank=True)
+    leader_name =  models.CharField(max_length=255, null=False)            
+    contact_phone = models.CharField(max_length=20, null=False)
+    hotline = models.CharField(max_length=20, null=False)
+    address = models.CharField(max_length=255)
+    primary_area = models.CharField(max_length=100)
+    team_type = models.CharField(
+        max_length=50,
+        choices=[(tag.value, tag.value) for tag in TeamType],
+    )
     status = models.CharField(
         max_length=50,
-        choices=[(tag.value, tag.value)for tag in TeamStatus],
+        choices=[(tag.value, tag.value) for tag in TeamStatus],
         default=TeamStatus.AVAILABLE
     )
     class Meta(TimeStampedModel.Meta, UnmanagedMeta):
         db_table = "rescue_teams"
-        indexes = [
-            models.Index(
-                fields=['latitude', 'longitude'],
-                name='idx_avail_team_loc',
-                condition=Q(status='Sẵn sàng') 
-            )
-        ]
+
 
 class RescueAssignments(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -44,10 +44,3 @@ class RescueAssignments(TimeStampedModel):
     completed_at = models.DateTimeField(null=True, blank=True)
     class Meta:
         db_table = 'rescue_assignments'
-        constraints = [
-            #: Một cặp (Request + Team) chỉ được xuất hiện 1 lần
-            models.UniqueConstraint(
-                fields=['rescue_request', 'rescue_team'], 
-                name='unique_assignment_pair'
-            )
-        ]

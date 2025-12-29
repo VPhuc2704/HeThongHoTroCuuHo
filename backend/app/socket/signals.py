@@ -10,17 +10,25 @@ def broadcast_new_request(sender, instance, created, **kwargs):
     if created:
         channel_layer = get_channel_layer()
 
-        data = {
-            "type":"send_new_coordinate",
-            "data":{
-                "id":str(instance.id),
-                "latitude": instance.latitude,
-                "longitude": instance.longitude,
-                "status": instance.status
-            }
+        data_payload = {
+            "id": instance.id,
+            "latitude": instance.latitude,
+            "longitude": instance.longitude,
+            "status": instance.status,
+            "address": instance.address,
+            "time": instance.created_at,
+            "code": instance.code, # Thêm code nếu model có
+            "name": instance.name  # Thêm name
         }
 
+        # Gửi vào group 'rescue_admin' (Đã đồng bộ)
         async_to_sync(channel_layer.group_send)(
-            "rescue_map_group",
-            data
+            "rescue_admin", 
+            {
+                "type": "send_update",
+                "data": {
+                    "event": "NEW_REQUEST", # Khớp với switch case ở Frontend
+                    "data": data_payload    # Khớp với destructuring { data }
+                }
+            }
         )

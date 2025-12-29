@@ -6,7 +6,7 @@ from django.db import transaction, connection
 from django.db.models import Q
 from django.utils import timezone
 from ninja import UploadedFile
-
+import json
 def dictfetchall(cursor):
     """
     Return all rows from a cursor as a dict
@@ -19,24 +19,62 @@ def dictfetchall(cursor):
 
 class RescueRequestService():
     @staticmethod
-    def create_request(data: RescueRequestSchema, account: Optional[Account] = None ) -> RescueRequest:
+    def create_request(data: RescueRequestSchema, account_id: Optional[str] = None ):
 
-        payload = data.model_dump()  # chuyển Schema sang dict
+        payload = data.model_dump()
+
+        lat = payload.pop("latitude")
+        lng = payload.pop("longitude")
 
         province_code = payload.pop('code', 'VN')
 
-        if account:
-            payload["account"] = account
+        if account_id:
+            payload["account_id"] = account_id
 
         with transaction.atomic():
             new_code = RescueRequestService._generate_code(province_code)
             payload['code'] = new_code
-            instance_request = RescueRequest.objects.create(**payload)
+            conditions = payload.get("conditions")
+
+            with connection.cursor() as cursor:
+                cursor.execute(""" 
+                    INSERT INTO rescue_requests (
+                                id, code, name,
+                                contact_phone, address, 
+                                adults, children, elderly, description, 
+                                conditions, location, account_id)
+                    VALUES( 
+                        gen_random_uuid(), %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s
+                    )
+                    RETURNING id, code , status
+                    """,
+                    [
+                        new_code,
+                        payload.get("name"),
+                        payload.get("contact_phone"),
+                        payload.get("address"),
+                        payload.get("adults"),
+                        payload.get("children"),
+                        payload.get("elderly"),
+                        payload.get("description"),
+                        json.dumps(conditions),  
+                        lng,
+                        lat,
+                        payload.get("account_id"),
+                    ]
+                )
+                request_id, code, status = cursor.fetchone()
+        return {
+            "id": request_id,
+            "code": code,
+            "status": status
+        }
             
             # --- Logic mở rộng ---
             # Ví dụ: Gửi thông báo socket realtime cho admin
             # notify_admin_new_request(instance)
-            return instance_request
+            # return instance_request
         
     def upload_media(request_id: str, files: List[UploadedFile]):
         try:
@@ -72,10 +110,11 @@ class RescueRequestService():
         sql = f"""
             SELECT 
                 r.id, r.code ,r.name, r.contact_phone, r.address, r.status, r.created_at, 
-                r.latitude, r.longitude, r.conditions,
-                r.adults, r.children, r.elderly,
+                ST_Y(r.location) AS latitude,
+                ST_X(r.location) AS longitude,
+                r.conditions, r.adults, r.children, r.elderly,
                 
-                LEFT(COALESCE(r.description, ''), 50) as description_short,
+                LEFT(COALESCE(r.description, ''), 100) as description_short,
                 
                 -- Summary số người
                 CASE 
@@ -107,8 +146,8 @@ class RescueRequestService():
                         'updated_at', a.updated_at,
                         'team_name', t.name,
                         'team_phone', t.contact_phone,
-                        'team_lat', t.latitude, 
-                        'team_lng', t.longitude
+                        'team_lat', ST_Y(t.location),
+                        'team_lng', ST_X(t.location)
                     )
                     FROM rescue_assignments a
                     JOIN rescue_teams t ON a.rescue_team_id = t.id
@@ -190,39 +229,117 @@ class RescueRequestService():
 
         # 3. Thực thi
         return cls._execute_search_query(conditions, params, page, size)
-        
     
     @staticmethod
-    def get_map_points(min_lat: float, max_lat: float, 
-                       min_lng: float, max_lng: float, 
-                       zoom: int):
+    def _calculate_grid_size(zoom: int, cluster_radius_px: int = 60) -> float:
         """
-        Lấy danh sách điểm cứu hộ tối ưu theo khung nhìn và độ zoom.
+        Tính kích thước ô lưới (mét) dựa trên mức zoom và bán kính pixel mong muốn.
+        
+        :param zoom: Mức zoom hiện tại (ví dụ: 5, 10, 15).
+        :param cluster_radius_px: Khoảng cách pixel trên màn hình để gộp điểm. 
+                                  (60px là chuẩn đẹp cho ngón tay bấm trên mobile).
+        :return: Kích thước ô lưới tính bằng mét.
         """
-        # 1. Logic nghiệp vụ: Tính toán Limit dựa trên Zoom
-        limit = 500         # Mặc định (Zoom xa - Toàn quốc)
-        if zoom >= 14:      # Zoom rất gần (Cấp Phường/Xã)
-            limit = 5000     
-        elif zoom >= 10:    # Zoom vừa (Cấp Quận/Huyện)
-            limit = 2000
-            
-        qs = RescueRequest.objects.filter(
-            latitude__gte=min_lat, latitude__lte=max_lat,
-            longitude__gte=min_lng, longitude__lte=max_lng
-        ).values(
-            'id', 'latitude', 'longitude', 'status', "code" 
-        ).order_by('-created_at')[:limit]
 
-        # Trả về list dictionary
-        return list(qs)
-    
+        if zoom >= 15:
+            return 0
+
+        # Hằng số: Chu vi Trái Đất (mét)
+        EARTH_CIRCUMFERENCE = 40075016.686
+        
+        # Hằng số: Kích thước Tile chuẩn của Web Maps (256x256 pixel)
+        TILE_SIZE = 256
+
+        # 1. Tính độ phân giải bản đồ tại mức zoom hiện tại (mét/pixel)
+        # Công thức chuẩn Web Mercator: Res = Initial_Res / 2^zoom
+        resolution = EARTH_CIRCUMFERENCE / (TILE_SIZE * (2 ** zoom))
+
+        # 2. Tính Grid Size thực tế (mét)
+        grid_meters = resolution * cluster_radius_px
+
+        return grid_meters
+
+    @classmethod
+    def get_map_points(cls, min_lat: float, max_lat: float,
+                    min_lng: float, max_lng: float,
+                    zoom: int):
+
+        radius = cls._calculate_grid_size(zoom)
+
+        base_params = {
+            "min_lat": min_lat,
+            "max_lat": max_lat,
+            "min_lng": min_lng,
+            "max_lng": max_lng,
+            "radius": radius,
+        }
+
+        # ZOOM CAO → TRẢ ĐIỂM THẬT
+        if radius == 0:
+            sql = """
+                SELECT
+                    r.id,
+                    r.code,
+                    r.name,
+                    r.adults,
+                    r.children,
+                    r.elderly,
+                    r.conditions,
+                    r.contact_phone,
+                    r.status,
+                    r.address,
+                    ST_Y(r.location) AS latitude,
+                    ST_X(r.location) AS longitude
+                FROM rescue_requests r
+                WHERE r.location && ST_SetSRID(
+                    ST_MakeEnvelope(
+                        %(min_lng)s, %(min_lat)s,
+                        %(max_lng)s, %(max_lat)s
+                    ),
+                    4326
+                )
+                ORDER BY r.created_at DESC
+            """
+            params = base_params
+
+        # ZOOM THẤP → CLUSTER
+        else:
+            sql = """WITH clustered AS (
+                    SELECT unnest(
+                        ST_ClusterWithin(
+                            ST_Transform(r.location, 3857),
+                            %(radius)s
+                        )
+                    ) AS cluster_geom
+                    FROM rescue_requests r
+                    WHERE r.location && ST_SetSRID(
+                        ST_MakeEnvelope(
+                            %(min_lng)s, %(min_lat)s,
+                            %(max_lng)s, %(max_lat)s
+                        ),
+                        4326
+                    )
+                )
+                SELECT
+                    ST_Y(ST_Transform(ST_Centroid(cluster_geom), 4326)) AS latitude,
+                    ST_X(ST_Transform(ST_Centroid(cluster_geom), 4326)) AS longitude,
+                    ST_NumGeometries(cluster_geom) AS total
+                FROM clustered
+                ORDER BY total DESC
+            """
+            params = base_params
+
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            return dictfetchall(cursor)
+
     @staticmethod
     def _generate_code(province_code: str) -> str:
         """
         Input: 'SG' (Sài Gòn)
         Output: 'SG-20251221-0001'
         """
-        p_code = province_code.upper() # sg -> SG   
+        p_code = province_code.upper()
         today_str = timezone.now().strftime('%Y%m%d')
         
         prefix = f"{p_code}-{today_str}-"

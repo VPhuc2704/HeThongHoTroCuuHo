@@ -1,9 +1,9 @@
 from ninja import Router
-from app.schemas.rescue_schema import RescueRequestSchema, ConditionTypeOutSchema, ConditionTypeSchema, RescueMapPoint, PaginatedRescueResponse
+from app.schemas.rescue_schema import RescueRequestSchema, ConditionTypeOutSchema, ConditionTypeSchema, RescueMapPoint, PaginatedRescueResponse, RescueMapPointCluster
 from app.services import RescueRequestService, ConditionTypeService
 from app.security.jwt_provider import JwtProvider
 from app.middleware.auth import JWTBearer
-from typing import List, Optional
+from typing import List, Optional, Union
 from ninja import UploadedFile, File
 
 router = Router(tags=["Rescue Request"])
@@ -11,20 +11,17 @@ router = Router(tags=["Rescue Request"])
 rescue_service = RescueRequestService()
 condition_service = ConditionTypeService()
 
+auth_bearer = JWTBearer()
 
 # User gửi requets cứu hộ
-@router.post("/rescue")
+@router.post("/rescue", auth=auth_bearer)
 def create_rescue(request, data: RescueRequestSchema):
-    user_account = JwtProvider.get_user_from_jwt(request)
-    new_request = rescue_service.create_request(data, account=user_account)
-    return {
-        "id": str(new_request.code),
-        "status": new_request.status
-    }
+    account = request.auth 
+    new_request = rescue_service.create_request(data, account_id=str(account.id))
+    return new_request
 
-@router.post("/rescue/{rescue_id}/media")
+@router.post("/rescue/{rescue_id}/media", response={200: dict, 404: dict})
 def upload_rescue_media(request, rescue_id: str, files: List[UploadedFile] = File(...)):
-    """ BƯỚC 2: Gửi file (Chạy ngầm) """
     result = RescueRequestService.upload_media(rescue_id, files)
     if not result:
         return 404, {"message": "Không tìm thấy yêu cầu cứu hộ"}
@@ -48,21 +45,25 @@ def list_my_requests(request, page: int = 1, size: int = 20, status: str = None,
     )
 
 
-@router.get("/map-points", response=List[RescueMapPoint])
+@router.get("/map-points", response=List[Union[RescueMapPoint, RescueMapPointCluster]])
 def get_map_points(request, 
                    min_lat: float, max_lat: float, 
                    min_lng: float, max_lng: float,
                    zoom: int):
-
+    
     map_points = RescueRequestService.get_map_points(
         min_lat=min_lat,
-        max_lat=max_lat,                                             
+        max_lat=max_lat,
         min_lng=min_lng,
         max_lng=max_lng,
         zoom=zoom
     )
+
+    if zoom > 14:
+        return [RescueMapPoint(**p) for p in map_points]
+    else:
+        return [RescueMapPointCluster(**p) for p in map_points]
     
-    return map_points
 
 
 @router.get("/requests", response=PaginatedRescueResponse)

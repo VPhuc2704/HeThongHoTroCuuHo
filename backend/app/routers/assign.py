@@ -15,7 +15,8 @@ from typing import List
 router = Router(tags=["Dispatch & Rescue Workflow"])
 auth_bearer = JWTBearer()
 
-# 1. ADMIN: Điều phối đội
+
+#ADMIN: Điều phối đội
 @router.post("/dispatch/assign", auth=auth_bearer, response={200: dict, 400: dict, 404: dict, 500: dict})
 @require_role(RoleCode.ADMIN)
 def assign_task_endpoint(request, payload: AssignTaskIn):
@@ -40,8 +41,34 @@ def assign_task_endpoint(request, payload: AssignTaskIn):
         return 400, {"success": False, "message": str(e)}
     except Exception as e:
         return 500, {"success": False, "message": f"Lỗi hệ thống: {str(e)}"}
+    
+    
+# Tìm đội gần nhất (Find Teams)
+@router.get("/find-teams", response=List[NearestTeam], auth=auth_bearer)
+@require_role(RoleCode.ADMIN)
+def find_teams_endpoint(request, params: FindNearest = Query(...)):
+    """API tìm đội cứu hộ gần nhất"""
+    teams = AssignService.find_nearest_teams(
+        lat=params.latitude, 
+        lng=params.longitude, 
+        radius_km=params.radius_km
+    )
+    return teams
 
-# 2. RESCUER: Xác nhận xuất phát
+
+# Lịch sử/Danh sách nhiệm vụ
+@router.get("/assignments", response=List[AssignmentOut], auth=auth_bearer)
+def get_my_assignments(request):
+    """
+    - Admin: Xem tất cả
+    - Rescuer: Xem nhiệm vụ của mình
+    """
+    account = request.auth
+    tasks = AssignService.get_assign(user=account)
+    return tasks
+
+
+#Đội cứu hộ: Xác nhận xuất phát
 @router.post("/task/start", auth=auth_bearer, response={200: dict, 400: dict, 403: dict})
 @require_role(RoleCode.RESCUER)
 def confirm_start_endpoint(request, payload: ConfirmStartIn):
@@ -63,7 +90,8 @@ def confirm_start_endpoint(request, payload: ConfirmStartIn):
     except (ValueError, ValidationError) as e:
         return 400, {"success": False, "message": str(e)}
 
-# 3. RESCUER: Xác nhận đã đến nơi (Arrived)
+
+#Đội cứu hộ: Xác nhận đã đến nơi (Arrived)
 @router.post("/task/arrived", auth=auth_bearer, response={200: dict, 400: dict})
 @require_role(RoleCode.RESCUER)
 def confirm_arrived_endpoint(request, payload: ConfirmStartIn):
@@ -81,7 +109,8 @@ def confirm_arrived_endpoint(request, payload: ConfirmStartIn):
     except Exception as e:
          return 400, {"success": False, "message": str(e)}
 
-# 4. RESCUER: Hoàn thành nhiệm vụ (Complete)
+
+# Đội cứu hộ: Hoàn thành nhiệm vụ (Complete)
 @router.post("/task/complete", auth=auth_bearer, response={200: dict, 400: dict})
 @require_role(RoleCode.RESCUER)
 def complete_task_endpoint(request, payload: CompleteTaskIn):
@@ -99,25 +128,3 @@ def complete_task_endpoint(request, payload: CompleteTaskIn):
         }
     except Exception as e:
         return 400, {"success": False, "message": str(e)}
-
-# 5. Tìm đội gần nhất (Find Teams)
-@router.get("/find-teams", response=List[NearestTeam], auth=auth_bearer)
-def find_teams_endpoint(request, params: FindNearest = Query(...)):
-    """API tìm đội cứu hộ gần nhất"""
-    teams = AssignService.find_nearest_teams(
-        lat=params.latitude, 
-        long=params.longitude, 
-        radius_km=params.radius_km
-    )
-    return teams
-
-# 6. Lịch sử/Danh sách nhiệm vụ
-@router.get("/assignments", response=List[AssignmentOut], auth=auth_bearer)
-def get_my_assignments(request):
-    """
-    - Admin: Xem tất cả
-    - Rescuer: Xem nhiệm vụ của mình
-    """
-    account = request.auth
-    tasks = AssignService.get_assign(user=account)
-    return tasks

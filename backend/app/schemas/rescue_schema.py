@@ -46,10 +46,21 @@ class RescueRequestSchema(Schema):
 
 class RescueMapPoint(Schema):
     id: uuid.UUID
+    code:str
+    name: str
+    adults: Optional[int] = 0
+    children: Optional[int] = 0
+    elderly: Optional[int] = 0
+    conditions: Optional[str]
+    contact_phone: Optional[str]
     latitude: float
     longitude: float
     status: str
-    code:str
+
+class RescueMapPointCluster(Schema):
+    latitude: float
+    longitude: float
+    total: int
 
 class ActiveAssignmentSchema(Schema):
     task_id: uuid.UUID
@@ -109,16 +120,27 @@ class RescueRequestTableRow(Schema):
 class RescueTeamOut(Schema):
     id: uuid.UUID
     name: str
+    leader_name: str
     latitude: Optional[float]
     longitude: Optional[float]
     contact_phone: Optional[str]
     status: str
+    hotline:  Optional[str]
+    team_type:  Optional[str]
+    address: str 
+    primary_area: str 
+    created_at: datetime
 
 class RescueTeamUpdate(Schema):
     name: Optional[str] = None
+    leader_name: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     contact_phone: Optional[str] = None
+    hotline: Optional[str] = None
+    team_type: Optional[str] = None
+    address: Optional[str] = None 
+    primary_area: Optional[str] = None
 
 class ConditionTypeSchema(Schema):
     name: str
