@@ -1,5 +1,6 @@
 // composables/useRescueService.ts
-import type { RescueResponse, RescueFilter, FindTeamParams, RescueTeam, AssignTeam } from '@/types/rescue';
+import type { RescueResponse, RescueFilter, FindTeamParams, RescueTeam, AssignTeam } from '~/types/rescue';
+import type { RescueTask } from '~/types/task';
 
 export const useRescueService = () => {
     // 1. Dùng Client chuẩn (đã có Auth & BaseURL)
@@ -43,10 +44,19 @@ export const useRescueService = () => {
         });
     };
 
+    // 2. Lấy danh sách nhiệm vụ đã phân công (CHO MÀN HÌNH BẠN ĐANG LÀM)
+    const getAssignments = async (): Promise<RescueTask[]> => {
+        return await apiFetch<RescueTask[]>(`/api/rescue-teams/assignments`, {
+            method: 'GET'
+        });
+    };
+
+
     return {
         getAll,
         updateStatus,
         findNearbyTeams,
-        assignTeam
+        assignTeam,
+        getAssignments
     };
 };

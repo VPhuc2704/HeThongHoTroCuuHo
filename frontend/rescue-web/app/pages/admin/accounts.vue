@@ -9,8 +9,6 @@ import AccountCreate from '~/components/account/AccountCreate.vue';
  
 definePageMeta({ layout: 'admin' });
 
-
-
 // 1. Kết nối Composable
 const { 
     loading, 
@@ -116,11 +114,11 @@ onMounted(fetchData);
                     <template #default="{ row }">
                         <div class="flex items-center gap-3 py-2">
                             <el-avatar :size="32" class="bg-indigo-600 text-white font-bold text-xs shrink-0">
-                                {{ getAvatarLetter(row.email) }}
+                                {{ getAvatarLetter(row.full_name) }}
                             </el-avatar>
                             <div class="flex flex-col overflow-hidden">
-                                <span class="font-semibold text-slate-800 text-sm truncate" :title="row.email">
-                                    {{ row.email || 'Không có email' }}
+                                <span class="font-semibold text-slate-800 text-sm truncate" :title="row.full_name">
+                                    {{ row.full_name || 'Không có Tên' }}
                                 </span>
                                 <span class="text-[10px] text-slate-400">
                                     Tham gia: {{ formatDate(row.created_at) }}
@@ -134,6 +132,14 @@ onMounted(fetchData);
                     <template #default="{ row }">
                         <span class="text-sm text-slate-600 font-mono">
                             {{ row.phone || '-' }}
+                        </span>
+                    </template>
+                </el-table-column>
+
+                <el-table-column label="Email" min-width="140">
+                    <template #default="{ row }">
+                        <span class="text-sm text-slate-600 font-mono">
+                            {{ row.email || 'Không có email' }}
                         </span>
                     </template>
                 </el-table-column>

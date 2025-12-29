@@ -21,6 +21,7 @@ const menuItems = [
     group: 'Quản Lý Sự Cố',
     items: [
       { name: 'Danh sách sự cố', path: '/admin/incidents', icon: List },
+      { name: 'Danh sách nhiệm vụ', path: '/admin/tasks', icon: List },
       { name: 'Phân tích dữ liệu', path: '/admin/analytics', icon: DataAnalysis },
     ]
   },

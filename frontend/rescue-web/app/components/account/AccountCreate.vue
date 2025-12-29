@@ -17,7 +17,7 @@ const formRef = ref<FormInstance>();
 const submitting = ref(false);
 
 const form = reactive<CreateAccountPayload>({
-    email: '',
+    full_name: '',
     password: '',
     role_code: 'RESCUER', // Mặc định
     phone: ''
@@ -26,7 +26,7 @@ const form = reactive<CreateAccountPayload>({
 // Reset form mỗi khi mở dialog
 watch(() => props.modelValue, (val) => {
     if (val) {
-        form.email = '';
+        form.full_name = '';
         form.password = '';
         form.phone = '';
         form.role_code = 'RESCUER';
@@ -61,10 +61,9 @@ const handleSubmit = async () => {
             try {
                 await createAccount(form);
                 ElMessage.success('Tạo tài khoản thành công');
-                emit('success'); // Báo cho cha reload data
+                emit('success'); 
                 handleClose();
             } catch (e: any) {
-                // Giả sử API trả lỗi dạng { data: { message: ... } }
                 const msg = e.response?._data?.message || e.message || 'Có lỗi xảy ra';
                 ElMessage.error(msg);
             } finally {
@@ -87,8 +86,8 @@ const handleSubmit = async () => {
         append-to-body
     >
         <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="mt-2 px-2">
-            <el-form-item label="Email đăng nhập" prop="email">
-                <el-input v-model="form.email" placeholder="email@example.com" />
+            <el-form-item label="Tên đăng nhập" prop="full_name">
+                <el-input v-model="form.full_name" placeholder="Tên đăng nhập" />
             </el-form-item>
             
             <el-form-item label="Mật khẩu" prop="password">

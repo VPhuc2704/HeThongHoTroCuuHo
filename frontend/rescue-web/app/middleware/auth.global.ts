@@ -8,7 +8,7 @@ export default defineNuxtRouteMiddleware((to, from) => {
   
 
   if (authStore.isAuthenticated && publicPages.includes(to.path)) {
-    return navigateTo('/admin/dashboard');
+    return navigateTo('/admin');
   }
 
   if (!authStore.isAuthenticated && !publicPages.includes(to.path)) {

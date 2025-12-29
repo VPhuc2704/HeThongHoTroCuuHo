@@ -62,10 +62,16 @@ export interface ActiveAssignment {
 export interface Rescue{
     id: string;
     name: string;
+    leader_name: string;
     latitude: number | null;
     longitude: number | null;
-    contact_phone: string | null;
+    contact_phone: string;
     status: string;
+    hotline: string;
+    team_type: string; 
+    address: string;
+    primary_area: string;
+    created_at: string;
 }
 
 export interface UpdateTeamPayload {
@@ -73,5 +79,11 @@ export interface UpdateTeamPayload {
     latitude?: number | null;
     longitude?: number | null;
     contact_phone?: string | null;
-    status?: string;
+    status?: string | null;
+    leader_name?: string | null ;
+    hotline?: string | null;
+    team_type?: string | null; 
+    address?: string | null;
+    primary_area?: string | null;
+    created_at?: string | null;
 }

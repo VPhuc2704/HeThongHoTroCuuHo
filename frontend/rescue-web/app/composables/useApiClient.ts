@@ -10,7 +10,6 @@ export const useApiClient = () => {
   ) => {
     const defaults: NitroFetchOptions<NitroFetchRequest> = {
       baseURL: config.public.apiBase,
-      // Quan trọng: Nếu API khác domain với FE, cần bật credentials để browser tự gửi Cookie HttpOnly
       credentials: 'include',
       headers: accessToken.value 
         ? { Authorization: `Bearer ${accessToken.value}` } 

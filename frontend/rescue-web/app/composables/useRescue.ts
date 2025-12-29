@@ -1,9 +1,7 @@
 // composables/useRescue.ts
 import { ref, watch } from 'vue';
-import type { RescueRequest, RescueFilter } from '@/types/rescue';
+import type { RescueRequest, RescueFilter } from '~/types/rescue';
 import { ElMessage } from 'element-plus';
-
-// Không cần import useRescueService vì Nuxt Auto-import
 
 export const useRescue = () => {
     // 1. Gọi Service API

@@ -1,7 +1,7 @@
 // composables/useAdminService.ts
 import type { AccountListResponse, CreateAccountPayload } from '~/types/account';
 import type { ApiResponse } from '~/types/api';
-import type { Rescue, UpdateTeamPayload} from '~/types/rescue';
+import type { Rescue, UpdateTeamPayload} from '@/types/rescue';
 
 export const useAdminService = () => {
     const { apiFetch } = useApiClient();
@@ -10,7 +10,7 @@ export const useAdminService = () => {
     
     // Lấy danh sách (có phân trang)
     const getAccounts = async (cursor: string | null = null, limit = 10, search = '') => {
-        return await apiFetch<AccountListResponse>('/api/accounts/admin/accounts', {
+        return await apiFetch<AccountListResponse>('/api/admin/accounts', {
             method: 'GET',
             params: { 
                 cursor, // Gửi mốc thời gian lên server
@@ -22,7 +22,7 @@ export const useAdminService = () => {
 
     // Tạo tài khoản mới (Cấp quyền)
     const createAccount = async (payload: CreateAccountPayload) => {
-        return await apiFetch('/api/accounts/admin/accounts', {
+        return await apiFetch('/api/admin/accounts', {
             method: 'POST',
             body: payload
         });
@@ -30,7 +30,7 @@ export const useAdminService = () => {
 
     // Khóa/Mở khóa tài khoản
     const toggleActive = async (id: number, isActive: boolean) => {
-        return await apiFetch(`/api/accounts/admin/accounts/${id}/active`, {
+        return await apiFetch(`/api/admin/accounts/${id}/active`, {
             method: 'PATCH',
             body: { is_active: isActive }
         });
