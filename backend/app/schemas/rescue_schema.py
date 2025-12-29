@@ -46,16 +46,21 @@ class RescueRequestSchema(Schema):
 
 class RescueMapPoint(Schema):
     id: uuid.UUID
+    code:str
+    name: str
+    adults: Optional[int] = 0
+    children: Optional[int] = 0
+    elderly: Optional[int] = 0
+    conditions: Optional[str]
+    contact_phone: Optional[str]
     latitude: float
     longitude: float
     status: str
-    code:str
 
 class RescueMapPointCluster(Schema):
     latitude: float
     longitude: float
     total: int
-    ids: Optional[List[str]] = None 
 
 class ActiveAssignmentSchema(Schema):
     task_id: uuid.UUID

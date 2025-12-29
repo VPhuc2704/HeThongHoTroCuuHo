@@ -231,73 +231,107 @@ class RescueRequestService():
         return cls._execute_search_query(conditions, params, page, size)
     
     @staticmethod
-    def _calculate_grid_size(min_lng: float, max_lng: float, zoom: int) -> float:
+    def _calculate_grid_size(zoom: int, cluster_radius_px: int = 60) -> float:
         """
-        Tính grid size theo viewport và zoom.
-        - zoom cao → grid nhỏ
-        - zoom thấp → grid lớn
+        Tính kích thước ô lưới (mét) dựa trên mức zoom và bán kính pixel mong muốn.
+        
+        :param zoom: Mức zoom hiện tại (ví dụ: 5, 10, 15).
+        :param cluster_radius_px: Khoảng cách pixel trên màn hình để gộp điểm. 
+                                  (60px là chuẩn đẹp cho ngón tay bấm trên mobile).
+        :return: Kích thước ô lưới tính bằng mét.
         """
-        # Nếu zoom rất gần → trả điểm thật
+
         if zoom >= 15:
             return 0
-        
-        # Chiều rộng viewport (degrees longitude)
-        lng_span = max_lng - min_lng
-        num_cells = max(1, 50 - zoom*2)  # số ô thay đổi theo zoom
-        grid_deg = lng_span / num_cells
 
-        # Chuyển sang meters (approx) để dùng ST_SnapToGrid 3857
-        # 1 độ longitude ~ 111_320 m tại xích đạo, dùng xấp xỉ
-        grid_meters = grid_deg * 111_320
+        # Hằng số: Chu vi Trái Đất (mét)
+        EARTH_CIRCUMFERENCE = 40075016.686
+        
+        # Hằng số: Kích thước Tile chuẩn của Web Maps (256x256 pixel)
+        TILE_SIZE = 256
+
+        # 1. Tính độ phân giải bản đồ tại mức zoom hiện tại (mét/pixel)
+        # Công thức chuẩn Web Mercator: Res = Initial_Res / 2^zoom
+        resolution = EARTH_CIRCUMFERENCE / (TILE_SIZE * (2 ** zoom))
+
+        # 2. Tính Grid Size thực tế (mét)
+        grid_meters = resolution * cluster_radius_px
+
         return grid_meters
-    
+
     @classmethod
     def get_map_points(cls, min_lat: float, max_lat: float,
-                       min_lng: float, max_lng: float,
-                       zoom: int) -> List[Dict[str, Any]]:
+                    min_lng: float, max_lng: float,
+                    zoom: int):
 
-        grid_size = cls._calculate_grid_size(min_lng, max_lng, zoom)
-        base_params = {"min_lat": min_lat, "max_lat": max_lat, "min_lng": min_lng, "max_lng": max_lng}
+        radius = cls._calculate_grid_size(zoom)
 
-        if grid_size == 0:
+        base_params = {
+            "min_lat": min_lat,
+            "max_lat": max_lat,
+            "min_lng": min_lng,
+            "max_lng": max_lng,
+            "radius": radius,
+        }
+
+        # ZOOM CAO → TRẢ ĐIỂM THẬT
+        if radius == 0:
             sql = """
                 SELECT
-                    r.id, r.code, r.status,
+                    r.id,
+                    r.code,
+                    r.name,
+                    r.adults,
+                    r.children,
+                    r.elderly,
+                    r.conditions,
+                    r.contact_phone,
+                    r.status,
+                    r.address,
                     ST_Y(r.location) AS latitude,
                     ST_X(r.location) AS longitude
                 FROM rescue_requests r
-                WHERE r.location && ST_MakeEnvelope(
-                    %(min_lng)s, %(min_lat)s,
-                    %(max_lng)s, %(max_lat)s,
+                WHERE r.location && ST_SetSRID(
+                    ST_MakeEnvelope(
+                        %(min_lng)s, %(min_lat)s,
+                        %(max_lng)s, %(max_lat)s
+                    ),
                     4326
                 )
                 ORDER BY r.created_at DESC
             """
             params = base_params
+
+        # ZOOM THẤP → CLUSTER
         else:
-            sql = """
+            sql = """WITH clustered AS (
+                    SELECT unnest(
+                        ST_ClusterWithin(
+                            ST_Transform(r.location, 3857),
+                            %(radius)s
+                        )
+                    ) AS cluster_geom
+                    FROM rescue_requests r
+                    WHERE r.location && ST_SetSRID(
+                        ST_MakeEnvelope(
+                            %(min_lng)s, %(min_lat)s,
+                            %(max_lng)s, %(max_lat)s
+                        ),
+                        4326
+                    )
+                )
                 SELECT
-                    ST_Y(ST_Transform(ST_Centroid(ST_Collect(r.location)), 4326)) AS latitude,
-                    ST_X(ST_Transform(ST_Centroid(ST_Collect(r.location)), 4326)) AS longitude,
-                    COUNT(*) AS total,
-                    json_agg(r.id) AS ids
-                FROM rescue_requests r
-                WHERE r.location && ST_MakeEnvelope(
-                    %(min_lng)s, %(min_lat)s,
-                    %(max_lng)s, %(max_lat)s,
-                    4326
-                )
-                GROUP BY ST_SnapToGrid(
-                    ST_Transform(r.location, 3857),
-                    %(grid_size)s
-                )
+                    ST_Y(ST_Transform(ST_Centroid(cluster_geom), 4326)) AS latitude,
+                    ST_X(ST_Transform(ST_Centroid(cluster_geom), 4326)) AS longitude,
+                    ST_NumGeometries(cluster_geom) AS total
+                FROM clustered
+                ORDER BY total DESC
             """
-            params = {**base_params, "grid_size": grid_size}
+            params = base_params
 
         with connection.cursor() as cursor:
             cursor.execute(sql, params)
             return dictfetchall(cursor)
-    
 
     @staticmethod
     def _generate_code(province_code: str) -> str:
@@ -305,7 +339,7 @@ class RescueRequestService():
         Input: 'SG' (Sài Gòn)
         Output: 'SG-20251221-0001'
         """
-        p_code = province_code.upper() # sg -> SG   
+        p_code = province_code.upper()
         today_str = timezone.now().strftime('%Y%m%d')
         
         prefix = f"{p_code}-{today_str}-"
