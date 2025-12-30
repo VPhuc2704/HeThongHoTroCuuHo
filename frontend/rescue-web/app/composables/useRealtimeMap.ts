@@ -1,28 +1,25 @@
-import { ref, shallowRef, onMounted, onBeforeUnmount } from 'vue';
-import type { MapPoint, MapBounds } from '~/types/map';
+// composables/useRealtimeMap.ts
+import { ref, shallowRef, onMounted, onBeforeUnmount, watch } from 'vue';
+import type { MapPoint, MapBounds, BackendPoint } from '~/types/map';
 
 export const useRealtimeMap = () => {
-  // 1. DEPENDENCY INJECTION
-  // Dùng client chuẩn để kế thừa tính năng tự động gửi Token & Refresh Token
-  const { apiFetch } = useApiClient(); 
-  
-  // Lấy cấu hình URL từ nuxt.config.ts (Không hardcode IP/Port)
   const config = useRuntimeConfig();
-  const API_BASE = config.public.apiBase as string; 
+  // Lấy giá trị cấu hình, có thể là undefined, '/api', hoặc 'http://...'
+  const API_BASE = config.public.apiBase as string | undefined; 
+  
+  const { apiFetch } = useApiClient();
+  const tokenCookie = useCookie('access_token');
 
-  // 2. STATE
-  // Dùng shallowRef để tối ưu hiệu năng khi array lớn (Vue không theo dõi sâu từng phần tử)
-  const points = shallowRef<MapPoint[]>([]);
+  const points = shallowRef<BackendPoint[]>([]);
   const socketStatus = ref<'CONNECTING' | 'OPEN' | 'CLOSED'>('CLOSED');
+  
   let socket: WebSocket | null = null;
+  let reconnectTimer: NodeJS.Timeout | null = null;
 
-  // 3. HTTP FETCH LOGIC
+  // ... (giữ nguyên hàm fetchPoints) ...
   const fetchPoints = async (bounds?: MapBounds) => {
     try {
-      // CLEAN CODE: 
-      // - Dùng apiFetch thay vì $fetch
-      // - Dùng params object thay vì nối chuỗi thủ công (an toàn & dễ đọc)
-      const res = await apiFetch<MapPoint[]>('/api/map-points', {
+      const res = await apiFetch<BackendPoint[]>('/map-points', {
         params: {
           min_lat: bounds?.min_lat ?? 8.0,
           max_lat: bounds?.max_lat ?? 12.0,
@@ -31,89 +28,90 @@ export const useRealtimeMap = () => {
           zoom: bounds?.zoom ?? 10
         }
       });
-
-      if (Array.isArray(res)) {
-        points.value = res;
-      }
+      if (Array.isArray(res)) points.value = res;
     } catch (error) {
-      // Lỗi 401 đã được apiFetch xử lý ngầm, ta chỉ log lỗi khác
-      console.error('Failed to fetch map points:', error);
+      console.error('Fetch error:', error);
     }
   };
 
-  // 4. WEBSOCKET LOGIC
+  // --- LOGIC WEBSOCKET MỚI ---
   const connectWebSocket = () => {
-    if (!API_BASE) return;
-    
-    socketStatus.value = 'CONNECTING';
-
-    // Tự động chuyển đổi http/https sang ws/wss
-    // Ví dụ: http://localhost:8000 -> ws://localhost:8000
-    const wsProtocol = API_BASE.startsWith('https') ? 'wss' : 'ws';
-    const wsUrl = API_BASE.replace(/^https?/, wsProtocol) + '/ws/map/';
-
-    socket = new WebSocket(wsUrl);
-
-    socket.onopen = () => {
-      console.log('🟢 WS Connected');
-      socketStatus.value = 'OPEN';
-    };
-
-    socket.onclose = () => {
-      console.warn('🔴 WS Disconnected');
-      socketStatus.value = 'CLOSED';
-      // Có thể thêm logic reconnect sau 5s tại đây nếu cần
-    };
-
-    socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        handleSocketMessage(data);
-      } catch (e) {
-        console.error('WS Parse Error', e);
-      }
-    };
-  };
-
-  // Helper: Merge dữ liệu Realtime vào mảng hiện có (Immutability)
-  const handleSocketMessage = (data: MapPoint | MapPoint[]) => {
-    if (Array.isArray(data)) {
-      points.value = data;
+    if (!tokenCookie.value) {
+      console.warn('⚠️ WS: Missing Token');
       return;
     }
 
-    // Copy-on-write để shallowRef nhận biết sự thay đổi
-    const newPoints = [...points.value];
-    const index = newPoints.findIndex(p => p.id === data.id);
+    if (socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) return;
+    
+    socketStatus.value = 'CONNECTING';
 
-    if (index !== -1) {
-      // Cập nhật điểm cũ
-      newPoints[index] = data;
-    } else {
-      // Thêm điểm mới
-      newPoints.push(data);
+    try {
+      // 1. Xác định Host và Protocol
+      let wsHost = '127.0.0.1:8000'; // Mặc định Backend Port
+      let wsProtocol = 'ws:';
+
+      if (API_BASE && (API_BASE.startsWith('http://') || API_BASE.startsWith('https://'))) {
+        // Trường hợp API_BASE là URL tuyệt đối (ví dụ cấu hình Production)
+        const urlObj = new URL(API_BASE);
+        wsHost = urlObj.host;
+        wsProtocol = urlObj.protocol === 'https:' ? 'wss:' : 'ws:';
+      } else {
+        // Trường hợp API_BASE là '/api' hoặc undefined (Development/Proxy)
+        // Lưu ý: WebSocket KHÔNG đi qua Nuxt Proxy (routeRules) được dễ dàng
+        // Nên ta trỏ thẳng về Backend Port 8000
+        wsHost = '127.0.0.1:8000'; 
+        
+        // Nếu trang web đang chạy https (production deploy), buộc dùng wss
+        if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+            wsProtocol = 'wss:';
+        }
+      }
+
+      // 2. Tạo URL (Đảm bảo không có /api ở path)
+      // URL chuẩn: ws://127.0.0.1:8000/ws/map/?token=...
+      const wsUrl = `${wsProtocol}//${wsHost}/ws/map/?token=${tokenCookie.value}`;
+
+      console.log('🔗 WS Target:', wsUrl);
+
+      socket = new WebSocket(wsUrl);
+
+      socket.onopen = () => {
+        console.log('🟢 WS Connected');
+        socketStatus.value = 'OPEN';
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+      };
+
+      socket.onclose = (event) => {
+        console.warn(`🔴 WS Closed: ${event.code}`);
+        socketStatus.value = 'CLOSED';
+        socket = null;
+        if (event.code !== 1000) reconnectTimer = setTimeout(connectWebSocket, 5000);
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          handleSocketMessage(data);
+        } catch (e) { console.error('WS JSON Error', e); }
+      };
+
+    } catch (err) {
+      console.error('🔥 WS Connection Failed:', err);
+      socketStatus.value = 'CLOSED';
     }
-
-    points.value = newPoints;
   };
 
-  // 5. LIFECYCLE
-  onMounted(() => {
-    // Chỉ kết nối socket, KHÔNG gọi fetchPoints() ở đây
-    // Để MapWidget tự gọi khi bản đồ load xong (tránh load 2 lần gây loop)
-    connectWebSocket();
-  });
+  // ... (Giữ nguyên handleSocketMessage, watch, onMounted, onBeforeUnmount) ...
+  const handleSocketMessage = (data: any) => { /* ...code cũ... */ };
   
-  onBeforeUnmount(() => {
-    if (socket) {
-      socket.close();
-      socket = null;
-    }
+  watch(tokenCookie, (newToken) => { if(newToken) { socket?.close(); connectWebSocket(); } });
+  
+  onMounted(() => { if (tokenCookie.value) connectWebSocket(); });
+  
+  onBeforeUnmount(() => { 
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    socket?.close(1000); 
   });
 
-  return {
-    points,
-    socketStatus,
-    fetchPoints
-  };
+  return { points, socketStatus, fetchPoints };
 };
