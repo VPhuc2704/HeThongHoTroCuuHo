@@ -3,7 +3,9 @@
 ## 📋 Thay đổi được thực hiện
 
 ### Backend (Django)
+
 1. **settings.py** - Thêm environment-based configuration
+
    - `ENV` variable: `development` hoặc `production`
    - `DEBUG` tự động tuỳ thuộc `ENV`
    - `ALLOWED_HOSTS` tuỳ thuộc `ENV`
@@ -11,17 +13,21 @@
    - Database config với default values cho local
 
 2. **api.py** - Thêm health check endpoint
+
    - `GET /api/health` - Return status, env, debug info
 
 3. **.env.example** - Template cho environment variables
 
 ### Frontend (Nuxt)
+
 1. **nuxt.config.ts** - Thêm runtimeConfig
+
    - `apiBase`: API URL (default: `http://127.0.0.1:8000/api`)
    - `wsBase`: WebSocket URL (default: `ws://127.0.0.1:8000`)
    - `env`: Node environment
 
 2. **useRealtimeMap.ts** - Dynamic WebSocket connection
+
    - Tự động detect environment (local vs production)
    - Sử dụng `wsBase` config từ environment variables
    - Fallback tới `127.0.0.1:8000` cho development
@@ -139,10 +145,10 @@ upstream frontend {
 server {
     listen 443 ssl http2;
     server_name api.example.com;
-    
+
     ssl_certificate /path/to/cert.pem;
     ssl_certificate_key /path/to/key.pem;
-    
+
     location / {
         proxy_pass http://backend;
         proxy_http_version 1.1;
@@ -158,10 +164,10 @@ server {
 server {
     listen 443 ssl http2;
     server_name example.com www.example.com;
-    
+
     ssl_certificate /path/to/cert.pem;
     ssl_certificate_key /path/to/key.pem;
-    
+
     location / {
         proxy_pass http://frontend;
         proxy_set_header Host $host;
@@ -177,6 +183,7 @@ server {
 ## 🔐 Environment Variables Reference
 
 ### Backend `.env`
+
 ```dotenv
 # Environment
 ENV=development|production
@@ -208,6 +215,7 @@ GOOGLE_CLIENT_ID=****
 ```
 
 ### Frontend `.env`
+
 ```dotenv
 # Local Development
 NUXT_PUBLIC_API_BASE=http://127.0.0.1:8000/api
@@ -223,6 +231,7 @@ NUXT_PUBLIC_WS_BASE=wss://api.example.com
 ## 🧪 Testing Configuration
 
 ### Local (Development)
+
 - ✅ CORS: Allow All Origins
 - ✅ DEBUG: True
 - ✅ Database: Local PostgreSQL
@@ -230,6 +239,7 @@ NUXT_PUBLIC_WS_BASE=wss://api.example.com
 - ✅ WebSocket: `ws://127.0.0.1:8000`
 
 ### Production
+
 - ✅ CORS: Specific Origins Only
 - ✅ DEBUG: False
 - ✅ Database: Production DB
@@ -260,16 +270,19 @@ curl https://api.example.com/api/health
 ## 🛠️ Troubleshooting
 
 ### WebSocket Connection Failed
+
 - **Local**: Ensure backend running at `127.0.0.1:8000`
 - **Production**: Check `NUXT_PUBLIC_WS_BASE` is `wss://` (secure)
 - **CORS**: Verify `CORS_ALLOWED_ORIGINS` includes frontend domain
 
 ### API 401/403 Errors
+
 - Check JWT token expiration
 - Verify `JWT_SECRET` matches between local and production
 - Ensure token is sent in Authorization header
 
 ### Database Connection Failed
+
 - Verify PostgreSQL running
 - Check DB credentials in `.env`
 - Run `python manage.py migrate`

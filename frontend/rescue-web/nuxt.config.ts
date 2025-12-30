@@ -28,7 +28,7 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {
-      apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000/api',
+      apiBase: process.env.NUXT_PUBLIC_API_BASE || '/api',
       wsBase: process.env.NUXT_PUBLIC_WS_BASE || 'ws://127.0.0.1:8000',
       env: process.env.NODE_ENV || 'development',
     }
