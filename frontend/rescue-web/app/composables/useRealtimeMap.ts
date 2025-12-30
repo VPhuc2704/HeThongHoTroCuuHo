@@ -4,9 +4,6 @@ import type { MapPoint, MapBounds, BackendPoint } from '~/types/map';
 
 export const useRealtimeMap = () => {
   const config = useRuntimeConfig();
-  // Lấy giá trị cấu hình, có thể là undefined, '/api', hoặc 'http://...'
-  const API_BASE = config.public.apiBase as string | undefined; 
-  
   const { apiFetch } = useApiClient();
   const tokenCookie = useCookie('access_token');
 
@@ -34,7 +31,7 @@ export const useRealtimeMap = () => {
     }
   };
 
-  // --- LOGIC WEBSOCKET MỚI ---
+  // --- LOGIC WEBSOCKET - DYNAMIC BASED ON ENVIRONMENT ---
   const connectWebSocket = () => {
     if (!tokenCookie.value) {
       console.warn('⚠️ WS: Missing Token');
@@ -46,33 +43,32 @@ export const useRealtimeMap = () => {
     socketStatus.value = 'CONNECTING';
 
     try {
-      // 1. Xác định Host và Protocol
-      let wsHost = '127.0.0.1:8000'; // Mặc định Backend Port
-      let wsProtocol = 'ws:';
+      let wsUrl: string;
 
-      if (API_BASE && (API_BASE.startsWith('http://') || API_BASE.startsWith('https://'))) {
-        // Trường hợp API_BASE là URL tuyệt đối (ví dụ cấu hình Production)
-        const urlObj = new URL(API_BASE);
-        wsHost = urlObj.host;
-        wsProtocol = urlObj.protocol === 'https:' ? 'wss:' : 'ws:';
+      if (typeof window === 'undefined') return; // SSR guard
+
+      const wsBase = config.public.wsBase as string;
+      const env = config.public.env as string;
+
+      // 🔧 DETERMINE WEBSOCKET URL
+      if (wsBase && (wsBase.startsWith('ws://') || wsBase.startsWith('wss://'))) {
+        // Production: Use config URL
+        wsUrl = `${wsBase}/ws/map/?token=${tokenCookie.value}`;
       } else {
-        // Trường hợp API_BASE là '/api' hoặc undefined (Development/Proxy)
-        // Lưu ý: WebSocket KHÔNG đi qua Nuxt Proxy (routeRules) được dễ dàng
-        // Nên ta trỏ thẳng về Backend Port 8000
-        wsHost = '127.0.0.1:8000'; 
+        // Development: Use current location or default
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host; // e.g., localhost:3000 or example.com
         
-        // Nếu trang web đang chạy https (production deploy), buộc dùng wss
-        if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
-            wsProtocol = 'wss:';
-        }
+        // ⚠️ IMPORTANT: WebSocket must point to backend port directly
+        // For development, override to backend port (8000)
+        const backendHost = env === 'development' 
+          ? '127.0.0.1:8000' 
+          : window.location.host;
+          
+        wsUrl = `${protocol}//${backendHost}/ws/map/?token=${tokenCookie.value}`;
       }
 
-      // 2. Tạo URL (Đảm bảo không có /api ở path)
-      // URL chuẩn: ws://127.0.0.1:8000/ws/map/?token=...
-      const wsUrl = `${wsProtocol}//${wsHost}/ws/map/?token=${tokenCookie.value}`;
-
       console.log('🔗 WS Target:', wsUrl);
-
       socket = new WebSocket(wsUrl);
 
       socket.onopen = () => {
@@ -93,6 +89,11 @@ export const useRealtimeMap = () => {
           const data = JSON.parse(event.data);
           handleSocketMessage(data);
         } catch (e) { console.error('WS JSON Error', e); }
+      };
+
+      socket.onerror = (error) => {
+        console.error('🔥 WS Error:', error);
+        socketStatus.value = 'CLOSED';
       };
 
     } catch (err) {
