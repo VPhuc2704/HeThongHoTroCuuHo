@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from django.conf import settings
+import requests
 
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
@@ -79,14 +80,18 @@ class AuthService(IAuthService):
 
      # Đăng nhập bằng OAuth 2.0
     def login_with_google(self, token: str):
-        try:
-            info = id_token.verify_oauth2_token(
-                token, 
-                google_requests.Request(),
-                settings.GOOGLE_CLIENT_ID
-            )
-        except ValueError:
+        resp = requests.get(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={
+                "Authorization": f"Bearer {token}"
+            },
+            timeout=5
+        )
+
+        if resp.status_code != 200:
             raise InvalidCredentials("Token Google không hợp lệ hoặc hết hạn.")
+
+        info = resp.json()
         google_id = info['sub']
         email = info.get('email')
         full_name = info.get('name')

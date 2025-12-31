@@ -33,6 +33,4 @@ class UserOut(Schema):
 
 class GoogleLoginResponse(Schema):
     success: bool
-    code: int
-    message: str
     data: UserOut 
