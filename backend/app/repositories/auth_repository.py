@@ -42,6 +42,9 @@ class IAccountRepo(ABC):
     def add_social_link(self, account: Account, provider: str, provider_id: str, email: str):
         pass
 
+    @abstractmethod
+    def get_for_update(self, account_id: str) -> Optional[Account]:
+        pass
 
 class AccountRepo(IAccountRepo):
 
@@ -135,3 +138,6 @@ class AccountRepo(IAccountRepo):
             provider_id=provider_id,
             defaults={'email': email}
         )
+
+    def get_for_update(self, account_id: str):
+        return Account.objects.select_for_update().get(id=account_id)
