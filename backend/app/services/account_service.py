@@ -1,10 +1,13 @@
 from abc import ABC, abstractmethod
 from ..repositories import  IAccountRepo,AccountRepo,IRoleRepo, RoleRepo, IRescueTeamRepo , RescueTeamRepo
+from ..schemas.account_schema import AccountUpdate
 from typing import Optional, Dict, Any
 from ninja.errors import ValidationError
 from ..security.jwt_provider import JwtProvider
-from django.db import transaction, IntegrityError
+from django.db import transaction
 from app.enum.role_enum import RoleCode
+
+from app.exception.custom_exceptions import PermissionDenied, ResourceNotFound, BaseAppException 
 
 class IAccountService(ABC):
     @abstractmethod
@@ -12,6 +15,20 @@ class IAccountService(ABC):
         pass
     @abstractmethod
     def get_list_accounts(self, *, limit: int, cursor: Optional[str]) -> Dict[str, Any]:
+        pass
+    @abstractmethod
+    def update_infor(self, current_user, account_id: str, payload: AccountUpdate):
+        pass
+    @abstractmethod
+    def get_profile(self, account_id: str):
+        pass
+
+    @abstractmethod
+    def lock_account(self, account_id: str):
+        pass
+
+    @abstractmethod
+    def unlock_account(self, account_id: str):
         pass
 
 jwt_provider = JwtProvider()
@@ -69,5 +86,77 @@ class AccountService(IAccountService):
             "next_cursor":next_cursor
         }
 
+    def update_infor(self, current_user, account_id: str, payload: AccountUpdate):
+        self.check_permission(current_user, account_id)
 
+        if payload.email is not None:
+            if self.account_repo.exists_by_email(payload.email):
+                raise BaseAppException(
+                    message="Email đã tồn tại",
+                    code=400,
+                    details={"email": payload.email}
+                )
+    
+            
+        with transaction.atomic():
+            account = self.account_repo.get_for_update(account_id=account_id)
+            update_fields = []
+            
+            if payload.email:
+                account.email = payload.email
+                update_fields.append("email")
+
+            if payload.full_name:
+                account.full_name = payload.full_name
+                update_fields.append("full_name")
+
+            if payload.password:
+                account.password_hash = jwt_provider.hash_password(payload.password)
+                update_fields.append("password_hash")
+
+            if update_fields:
+                account.save(update_fields=update_fields)
+        return account             
+
+
+
+    def check_permission(self, current_user, account_id):
+        if current_user.role.code != RoleCode.ADMIN:
+            if str(current_user.id) != str(account_id):
+                raise PermissionError("Không có quyền truy cập tài khoản này")
+
+    def get_profile(self, account_id):
+        try:
+            account = self.account_repo.get_by_id(account_id)
+        except:
+            raise BaseAppException(
+            message="Tài khoản không tồn tại",
+            code=404
+        )
+        return account
+
+    def lock_account(self, account_id):
+        with transaction.atomic():
+            account = self.account_repo.get_for_update(account_id)
+
+        if not account.is_active:
+            return account
+        account.is_active = False
+        account.save(update_fields=["is_active"])
+
+        return account
+    
+    def unlock_account(self, account_id):
+        with transaction.atomic():
+            account = self.account_repo.get_for_update(account_id)
+
+        account.is_active = True
+        account.save(update_fields=["is_active"])
+
+        return account
+
+    
+
+
+    
 
