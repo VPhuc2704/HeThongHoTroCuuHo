@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'package:flutter/foundation.dart'; // Import để check kIsWeb
+import 'package:flutter/foundation.dart';
 import '../models/rescue_request.dart';
 import '../services/province_service.dart';
 import '../services/request_service.dart';
 import '../services/auth_service.dart';
 import '../services/location_service.dart';
+
+import './location_picker_screen.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 
 class SOSFormScreen extends StatefulWidget {
   const SOSFormScreen({super.key});
@@ -22,6 +27,8 @@ class _SOSFormScreenState extends State<SOSFormScreen> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _descriptionController = TextEditingController();
+
+  final _addressController = TextEditingController();
 
   // Style Constants
   final Color _primaryColor = const Color(0xFFD32F2F); // Đỏ đậm hơn chút cho SOS
@@ -62,6 +69,7 @@ class _SOSFormScreenState extends State<SOSFormScreen> {
     _nameController.dispose();
     _phoneController.dispose();
     _descriptionController.dispose();
+    _addressController.dispose();
     super.dispose();
   }
 
@@ -73,38 +81,104 @@ class _SOSFormScreenState extends State<SOSFormScreen> {
     }
   }
 
+  // --- LOGIC MỚI: CHUYỂN ĐỔI TỌA ĐỘ -> ĐỊA CHỈ ---
+  Future<void> _getAddressFromLatLng(double lat, double lng) async {
+    try {
+      // Gọi thư viện geocoding
+      List<Placemark> placemarks = await placemarkFromCoordinates(lat, lng);
+
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks[0];
+        // Tạo chuỗi địa chỉ từ các thành phần (Đường, Quận, Tỉnh...)
+        // Bạn có thể tùy chỉnh thứ tự hiển thị tại đây
+        String address = [
+          place.street,
+          place.subAdministrativeArea,
+          place.administrativeArea
+        ].where((e) => e != null && e.isNotEmpty).join(", "); // Lọc bỏ null và nối bằng dấu phẩy
+
+        setState(() {
+          _address = address;
+          _addressController.text = address; // Điền tự động vào ô nhập liệu
+        });
+      }
+    } catch (e) {
+      print("Lỗi Geocoding: $e");
+      // Nếu lỗi mạng hoặc không tìm thấy, hiển thị tọa độ thô
+      setState(() {
+        _addressController.text = "Tọa độ: $lat, $lng";
+      });
+    }
+  }
+
+  // --- LOGIC MỚI: MỞ BẢN ĐỒ ---
+  Future<void> _openMapPicker() async {
+    // Nếu chưa có tọa độ, thử lấy GPS hiện tại làm tâm
+    if (_latitude == null || _longitude == null) {
+      await _getCurrentLocation();
+    }
+
+    // Chuyển sang màn hình bản đồ
+    final LatLng? result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LocationPickerScreen(
+            initialLat: _latitude ?? 10.7769, // Mặc định HCM nếu null
+            initialLng: _longitude ?? 106.7009
+        ),
+      ),
+    );
+
+    // Khi quay lại, nếu có kết quả thì cập nhật
+    if (result != null) {
+      setState(() {
+        _latitude = result.latitude;
+        _longitude = result.longitude;
+      });
+      // Gọi hàm chuyển đổi để lấy tên đường mới
+      await _getAddressFromLatLng(result.latitude, result.longitude);
+    }
+  }
+
   // --- LOCATION LOGIC ---
-  // --- LOCATION LOGIC (ĐÃ SỬA LỖI) ---
   Future<void> _getCurrentLocation() async {
     setState(() => _isLoadingLocation = true);
     try {
-      final location = await LocationService.getCurrentLocation();
+      // 1. Gọi đúng tên hàm mới là .getRescueLocation()
+      final location = await LocationService.getRescueLocation();
 
-      // SỬA: Thêm dấu chấm than (!) hoặc ép kiểu để đảm bảo không null
-      final double lat = location['latitude'] ?? 0.0;
-      final double lng = location['longitude'] ?? 0.0;
-
-      final addressText = "Toạ độ: ${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}";
+      // 2. Sửa cách lấy dữ liệu: Dùng dấu chấm (.) thay vì ngoặc vuông ['']
+      final double lat = location.latitude;
+      final double lng = location.longitude;
 
       if (mounted) {
         setState(() {
           _latitude = lat;
           _longitude = lng;
-          _address = addressText;
           _isLoadingLocation = false;
         });
+        await _getAddressFromLatLng(lat, lng);
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoadingLocation = false);
+        // Hiển thị lỗi rõ ràng hơn
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Không lấy được vị trí: $e'),
-          backgroundColor: Colors.orange,
+          content: Text('Lỗi vị trí: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'Cài đặt',
+            textColor: Colors.white,
+            onPressed: () {
+              // Mở cài đặt nếu cần (có thể import geolocator để dùng hàm này)
+              // Geolocator.openLocationSettings();
+            },
+          ),
         ));
       }
     }
   }
-
   // --- IMAGE LOGIC ---
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
@@ -385,44 +459,57 @@ class _SOSFormScreenState extends State<SOSFormScreen> {
           const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Divider()),
 
           // Location Picker
-          InkWell(
-            onTap: _getCurrentLocation,
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.blue.shade100),
+          TextFormField(
+            controller: _addressController,
+            maxLines: 2, // Cho phép xuống dòng nếu địa chỉ dài
+            decoration: InputDecoration(
+              labelText: 'Địa chỉ hiện tại (GPS)',
+              hintText: 'Đang lấy vị trí...',
+              prefixIcon: const Icon(Icons.location_on, color: Colors.red),
+              // Nút mở bản đồ nằm ngay trong ô nhập liệu
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.map_outlined, color: Colors.blue, size: 28),
+                tooltip: "Chọn trên bản đồ",
+                onPressed: _openMapPicker,
               ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                    child: _isLoadingLocation
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.my_location, color: Colors.blue),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Vị trí hiện tại', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-                        const SizedBox(height: 4),
-                        Text(
-                          _address ?? 'Chưa xác định vị trí',
-                          style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-                          maxLines: 2, overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              filled: true,
+              fillColor: Colors.blue.shade50.withOpacity(0.3),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            validator: (v) => v!.isEmpty ? 'Bắt buộc phải có vị trí' : null,
+            onChanged: (val) {
+              // Cho phép người dùng sửa tay nếu GPS sai số nhà
+              _address = val;
+            },
+          ),
+
+          const SizedBox(height: 8),
+
+          // 2. Nút nhỏ để lấy lại GPS nếu cần
+          Align(
+            alignment: Alignment.centerRight,
+            child: InkWell(
+              onTap: _getCurrentLocation,
+              child: Padding(
+                padding: const EdgeInsets.all(4.0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_isLoadingLocation)
+                      const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))
+                    else
+                      const Icon(Icons.my_location, size: 16, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    Text(
+                      "Lấy lại vị trí GPS",
+                      style: TextStyle(color: Colors.grey[700], fontSize: 12, fontWeight: FontWeight.w500),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          )
+          ),
         ],
       ),
     );

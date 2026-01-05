@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:url_launcher/url_launcher.dart'; // Nếu muốn gọi điện thoại (cần thêm vào pubspec.yaml)
+import 'package:url_launcher/url_launcher.dart';
 import '../services/request_service.dart';
 
 class UserRequestDetailScreen extends StatefulWidget {
@@ -17,6 +17,33 @@ class UserRequestDetailScreen extends StatefulWidget {
 class _UserRequestDetailScreenState extends State<UserRequestDetailScreen> {
   final Color _primaryColor = const Color(0xFFE53935);
   bool _isCancelling = false;
+
+  // --- HÀM XỬ LÝ URL ẢNH (QUAN TRỌNG: FIX LỖI KHÔNG HIỆN ẢNH) ---
+  String _getValidImageUrl(String path) {
+    if (path.startsWith('http') || path.startsWith('https')) {
+      return path;
+    }
+
+    String baseUrl = RequestService.baseUrl;
+    if (baseUrl.endsWith('/api')) {
+      baseUrl = baseUrl.replaceAll('/api', '');
+    }
+
+    if (baseUrl.endsWith('/')) {
+      baseUrl = baseUrl.substring(0, baseUrl.length - 1);
+    }
+
+    String cleanPath = path;
+
+    if (cleanPath.startsWith('/')) {
+      cleanPath = cleanPath.substring(1);
+    }
+
+    if (!cleanPath.startsWith('media/')) {
+      cleanPath = 'media/$cleanPath';
+    }
+    return '$baseUrl/$cleanPath';
+  }
 
   // --- HELPER STATUS ---
   String _normalizeStatus(String? rawStatus) {
@@ -73,7 +100,6 @@ class _UserRequestDetailScreenState extends State<UserRequestDetailScreen> {
     if (mounted && success) Navigator.pop(context, true);
   }
 
-  // --- HELPER GỌI ĐIỆN ---
   void _makePhoneCall(String phoneNumber) async {
     final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
     if (await canLaunchUrl(launchUri)) {
@@ -85,12 +111,10 @@ class _UserRequestDetailScreenState extends State<UserRequestDetailScreen> {
   Widget build(BuildContext context) {
     final req = widget.request;
 
-    // 1. Xử lý dữ liệu cơ bản
     String displayCode = req['code'] ?? req['id']?.toString().substring(0, 8).toUpperCase() ?? 'N/A';
     String rawStatusText = req['status'] ?? 'Chờ xử lý';
     String normalizedStatus = _normalizeStatus(rawStatusText);
 
-    // 2. Xử lý Ngày giờ
     DateTime requestTime = DateTime.now();
     try {
       if (req['created_at'] != null) requestTime = DateTime.parse(req['created_at']);
@@ -98,18 +122,13 @@ class _UserRequestDetailScreenState extends State<UserRequestDetailScreen> {
     } catch (_) {}
     final dateFormat = DateFormat('HH:mm - dd/MM/yyyy');
 
-    // 3. Xử lý Vị trí
     final double lat = (req['latitude'] is String) ? double.parse(req['latitude']) : (req['latitude'] as num).toDouble();
     final double lng = (req['longitude'] is String) ? double.parse(req['longitude']) : (req['longitude'] as num).toDouble();
 
-    // 4. Xử lý Mô tả (Fix lỗi description_short)
     String description = req['description'] ?? req['description_short'] ?? 'Không có mô tả thêm.';
     if (description.isEmpty) description = 'Không có mô tả thêm.';
 
-    // 5. Xử lý Hình ảnh
     List<dynamic> mediaUrls = req['media_urls'] ?? [];
-
-    // 6. Xử lý Đội cứu hộ (Active Assignment)
     Map<String, dynamic>? assignment = req['active_assignment'];
 
     return Scaffold(
@@ -124,7 +143,7 @@ class _UserRequestDetailScreenState extends State<UserRequestDetailScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // --- HEADER: MÃ & TRẠNG THÁI ---
+            // --- HEADER ---
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -151,7 +170,6 @@ class _UserRequestDetailScreenState extends State<UserRequestDetailScreen> {
             ),
             const SizedBox(height: 16),
 
-            // --- [MỚI] THÔNG TIN ĐỘI CỨU HỘ (Nếu có) ---
             if (assignment != null)
               Container(
                 margin: const EdgeInsets.only(bottom: 16),
@@ -193,7 +211,7 @@ class _UserRequestDetailScreenState extends State<UserRequestDetailScreen> {
                 ),
               ),
 
-            // --- VỊ TRÍ & BẢN ĐỒ ---
+            // --- VỊ TRÍ & BẢN ĐỒ (ĐÃ SỬA DÙNG CARTODB ĐỂ KHÔNG BỊ CHẶN) ---
             Container(
               padding: const EdgeInsets.all(16),
               decoration: _buildCardDecoration(),
@@ -215,7 +233,12 @@ class _UserRequestDetailScreenState extends State<UserRequestDetailScreen> {
                       child: FlutterMap(
                         options: MapOptions(initialCenter: LatLng(lat, lng), initialZoom: 15),
                         children: [
-                          TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+                          TileLayer(
+                            // SỬA LẠI MAP: Dùng CartoDB Voyager (Đẹp & Không bị chặn)
+                            urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                            subdomains: const ['a', 'b', 'c', 'd'],
+                            userAgentPackageName: 'com.vanphuc.rescuevn',
+                          ),
                           MarkerLayer(markers: [
                             Marker(
                               point: LatLng(lat, lng),
@@ -283,7 +306,7 @@ class _UserRequestDetailScreenState extends State<UserRequestDetailScreen> {
             ),
             const SizedBox(height: 16),
 
-            // --- [MỚI] HÌNH ẢNH ĐÍNH KÈM ---
+            // --- HÌNH ẢNH (ĐÃ SỬA LOGIC URL) ---
             if (mediaUrls.isNotEmpty)
               Container(
                 padding: const EdgeInsets.all(16),
@@ -300,23 +323,32 @@ class _UserRequestDetailScreenState extends State<UserRequestDetailScreen> {
                         itemCount: mediaUrls.length,
                         separatorBuilder: (_, __) => const SizedBox(width: 8),
                         itemBuilder: (context, index) {
-                          // Xử lý URL ảnh (Backend trả về đường dẫn tương đối)
-                          String url = mediaUrls[index];
-                          if (!url.startsWith('http')) {
-                            url = '${RequestService.baseUrl}/$url'; // Nối với BaseURL
-                          }
+                          // Dùng hàm _getValidImageUrl mới để fix lỗi đường dẫn
+                          String fullUrl = _getValidImageUrl(mediaUrls[index]);
 
                           return ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: Image.network(
-                              url,
+                              fullUrl,
                               width: 120,
                               height: 120,
                               fit: BoxFit.cover,
-                              errorBuilder: (ctx, _, __) => Container(
-                                width: 120, height: 120, color: Colors.grey[200],
-                                child: const Icon(Icons.broken_image, color: Colors.grey),
-                              ),
+                              // Thêm headers này để ép load lại nếu cần (dù cache 304 vẫn hiện)
+                              headers: const {'Cache-Control': 'no-cache'},
+                              errorBuilder: (ctx, error, stackTrace) {
+                                print("Lỗi load ảnh: $fullUrl - $error");
+                                return Container(
+                                  width: 120, height: 120, color: Colors.grey[200],
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.broken_image, color: Colors.grey),
+                                      const SizedBox(height: 4),
+                                      Text("Lỗi ảnh", style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+                                    ],
+                                  ),
+                                );
+                              },
                             ),
                           );
                         },
@@ -328,7 +360,6 @@ class _UserRequestDetailScreenState extends State<UserRequestDetailScreen> {
 
             const SizedBox(height: 24),
 
-            // --- ACTION BUTTON ---
             if (normalizedStatus == 'pending')
               SizedBox(
                 width: double.infinity,
@@ -354,7 +385,6 @@ class _UserRequestDetailScreenState extends State<UserRequestDetailScreen> {
     );
   }
 
-  // Helper Widgets
   BoxDecoration _buildCardDecoration() {
     return BoxDecoration(
       color: Colors.white,

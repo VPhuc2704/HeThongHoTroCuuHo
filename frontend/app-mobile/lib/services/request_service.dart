@@ -19,7 +19,7 @@ class RequestService {
   // --- API 1: TẠO REQUEST ---
   static Future<String?> createRequest(RescueRequest request) async {
     final token = await AuthService.getToken();
-    final url = Uri.parse('$baseUrl/api/rescue');
+    final url = Uri.parse('$baseUrl/api/requests/rescue');
 
     try {
       final response = await http.post(
@@ -63,7 +63,7 @@ class RequestService {
     if (files.isEmpty) return;
 
     final token = await AuthService.getToken();
-    final url = Uri.parse('$baseUrl/api/rescue/$rescueId/media');
+    final url = Uri.parse('$baseUrl/api/requests/rescue/$rescueId/media');
 
     try {
       var request = http.MultipartRequest('POST', url);
@@ -105,7 +105,7 @@ class RequestService {
   static Future<List<RescueRequest>> getUserRequests() async {
     final token = await AuthService.getToken();
     // Đảm bảo URL này đúng với BE của bạn
-    final url = Uri.parse('$baseUrl/api/my-requests/history');
+    final url = Uri.parse('$baseUrl/api/requests/my-requests/history');
 
     try {
       final response = await http.get(

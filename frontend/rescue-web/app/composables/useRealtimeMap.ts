@@ -19,7 +19,7 @@ export const useRealtimeMap = () => {
   // ... (giữ nguyên hàm fetchPoints) ...
   const fetchPoints = async (bounds?: MapBounds) => {
     try {
-      const res = await apiFetch<BackendPoint[]>('/map-points', {
+      const res = await apiFetch<BackendPoint[]>('/requests/map-points', {
         params: {
           min_lat: bounds?.min_lat ?? 8.0,
           max_lat: bounds?.max_lat ?? 12.0,
