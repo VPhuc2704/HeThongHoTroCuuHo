@@ -30,7 +30,7 @@ jobs:
       - name: Build and Push Frontend
         uses: docker/build-push-action@v4
         with:
-          context: ./frontend # ⚠️ Đảm bảo đúng tên thư mục chứa code Nuxt
+          context: ./frontend/rescue-web # ⚠️ Đảm bảo đúng tên thư mục chứa code Nuxt
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/rescuevn-frontend:latest
 
