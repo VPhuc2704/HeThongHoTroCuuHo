@@ -1,0 +1,10 @@
+.git
+.gitignore
+__pycache__
+venv
+env
+node_modules
+.output
+.nuxt
+*.log
+.DS_Store
