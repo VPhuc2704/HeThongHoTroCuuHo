@@ -182,10 +182,10 @@ const handleSubmit = async () => {
             </div>
 
             <div key="email" class="group">
-              <label class="text-[11px] font-bold text-gray-500 mb-1.5 block uppercase tracking-wider">Email định danh</label>
+              <label class="text-[11px] font-bold text-gray-500 mb-1.5 block uppercase tracking-wider">SĐT định danh</label>
               <el-input 
                 v-model="formData.email" 
-                placeholder="canbo@rescue.gov.vn"
+                placeholder="0999996868"
                 class="pro-input"
               >
                 <template #prefix><el-icon class="text-gray-500"><Message /></el-icon></template>
