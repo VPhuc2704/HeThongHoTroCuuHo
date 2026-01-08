@@ -66,7 +66,7 @@ def get_map_points(request,
     
 
 
-@router.get("/requests", response=PaginatedRescueResponse)
+@router.get("", response=PaginatedRescueResponse)
 def list_rescue_requests(request, 
                         page: int = 1, 
                         page_size: int = 20, 

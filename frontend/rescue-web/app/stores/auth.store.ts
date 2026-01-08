@@ -20,7 +20,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true;
     try {
       const data = await loginApi(form.identifier, form.password);
-      accessToken.value = data.access_token;
+      accessToken.value = data.token.access_token;
       user.value = data.user;
       return navigateTo('/admin');
     } catch (error: any) {

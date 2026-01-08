@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from django.conf import settings
+import requests
 
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
@@ -79,37 +80,59 @@ class AuthService(IAuthService):
 
      # Đăng nhập bằng OAuth 2.0
     def login_with_google(self, token: str):
+        google_id = None
+        email = None
+        full_name = None
+
         try:
-            info = id_token.verify_oauth2_token(
-                token, 
-                google_requests.Request(),
-                settings.GOOGLE_CLIENT_ID
-            )
-        except ValueError:
-            raise InvalidCredentials("Token Google không hợp lệ hoặc hết hạn.")
-        google_id = info['sub']
-        email = info.get('email')
-        full_name = info.get('name')
+            if token.startswith('ya29.'):
+                user_info_url = f"https://www.googleapis.com/oauth2/v3/userinfo?access_token={token}"
+                resp = requests.get(user_info_url)
+                
+                if resp.status_code != 200:
+                    raise InvalidCredentials("Token Web không hợp lệ hoặc hết hạn.")
+                
+                info = resp.json()
+                google_id = info['sub']
+                email = info.get('email')
+                full_name = info.get('name')
 
-        if not email:
-            raise InvalidCredentials("Tài khoản Google này không có Email hợp lệ.")
-
-        user = self.repo.get_by_social(provider="google", provider_id=google_id)
-        
-        if not user:
-            user = self.repo.get_by_email_or_phone(email)
-            if user:
-                self.repo.add_social_link(user, 'google', google_id, email)
+           
             else:
-                citizen_role = self.role_repo.get_by_code(RoleCode.CITIZEN.value)
-                user = self.repo.create_with_social(
-                    email=email,
-                    full_name=full_name,
-                    provider='google',
-                    provider_id=google_id,
-                    role=citizen_role
+                info = id_token.verify_oauth2_token(
+                    token, 
+                    google_requests.Request(), 
+                    audience=None 
                 )
-        return self._build_login_result(user)
+                
+                google_id = info['sub']
+                email = info.get('email')
+                full_name = info.get('name')
+
+            if not email:
+                raise InvalidCredentials("Không tìm thấy Email.")
+
+            user = self.repo.get_by_social(provider="google", provider_id=google_id)
+            
+            if not user:
+                user = self.repo.get_by_email_or_phone(email)
+                if user:
+                    self.repo.add_social_link(user, 'google', google_id, email)
+                else:
+                    citizen_role = self.role_repo.get_by_code(RoleCode.CITIZEN.value)
+                    user = self.repo.create_with_social(
+                        email=email,
+                        full_name=full_name if full_name else email.split('@')[0],
+                        provider='google',
+                        provider_id=google_id,
+                        role=citizen_role
+                    )
+            
+            return self._build_login_result(user)
+
+        except Exception as e:
+            print(f"Lỗi xác thực Google: {e}")
+            raise InvalidCredentials(f"Lỗi đăng nhập: {str(e)}")
 
     # Cấp lại access_token
     def refresh_token(self, refresh_token: str) -> str:

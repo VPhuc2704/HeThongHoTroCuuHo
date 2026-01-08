@@ -10,6 +10,6 @@ class IRefreshRepo(ABC):
 
 class RefreshRepo(IRefreshRepo):
     def find_by_token(self, token) -> Optional[RefreshToken]:
-        
+
         return RefreshToken.objects.filter(token=token).first()
 

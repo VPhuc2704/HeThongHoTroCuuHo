@@ -58,7 +58,9 @@ def login(request, payload: LoginSchema):
             "id": result["id"],
             "email": result["email"],
             "full_name": result["full_name"],
-            "access_token": result["token"]["access_token"],
+            "token": {     
+                "access_token": result["token"]["access_token"],
+            }
         },
         status=200
     )
@@ -74,14 +76,11 @@ def login(request, payload: LoginSchema):
     )
     return response
 
-@router.post("/google", response={200: GoogleLoginResponse, 401: dict})
+@router.post("/google", response={200: UserOut, 401: dict})
 def login_with_google(request, payload: GoogleAuthRequest):
     try:
         result = auth_service.login_with_google(payload.token)
-        return {
-            "success": True,
-            "data": result
-        }
+        return result
     except Exception as e:
         return 401, {"detail": str(e)}
 

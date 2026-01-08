@@ -10,62 +10,81 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _usernameController = TextEditingController(); // Đây là email/identifier
+  final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
 
-  // Màu chủ đạo
   final Color _primaryColor = const Color(0xFFE53935);
 
-  // --- HÀM ĐĂNG NHẬP THẬT ---
+  // --- HÀM ĐĂNG NHẬP GIỮ NGUYÊN ---
   void _login() async {
-    // 1. Validate đầu vào
     final identifier = _usernameController.text.trim();
     final password = _passwordController.text.trim();
 
     if (identifier.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Vui lòng nhập Email và Mật khẩu'),
-          backgroundColor: Colors.orange,
-          behavior: SnackBarBehavior.floating,
-        ),
+        const SnackBar(content: Text('Vui lòng nhập Email và Mật khẩu'), backgroundColor: Colors.orange),
       );
       return;
     }
 
-    // 2. Bắt đầu loading
     setState(() => _isLoading = true);
-
-    // 3. Gọi API qua Service
     bool success = await AuthService.login(identifier, password);
-
-    // 4. Tắt loading
     setState(() => _isLoading = false);
 
-    // 5. Xử lý kết quả
     if (success) {
-      if (!mounted) return; // Kiểm tra xem màn hình còn tồn tại không
-
+      if (!mounted) return;
       final user = AuthService.getCurrentUser();
-      // Lấy role, chuyển về chữ hoa để so sánh cho chắc chắn
       final role = (user?['role'] ?? '').toString().toUpperCase();
 
-      // Logic điều hướng dựa trên Role
       if (role == 'RESCUER' || role == 'RESCUER') {
-        // Nếu là Cứu hộ hoặc Admin -> Vào Dashboard Cứu hộ
         Navigator.pushReplacementNamed(context, '/rescue-dashboard');
       } else {
-        // Còn lại (USER) -> Vào trang Người dân
         Navigator.pushReplacementNamed(context, '/user-home');
       }
     } else {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Đăng nhập thất bại! Kiểm tra lại Email/Mật khẩu.'),
-          backgroundColor: _primaryColor,
-          behavior: SnackBarBehavior.floating,
+        SnackBar(content: const Text('Đăng nhập thất bại!'), backgroundColor: _primaryColor),
+      );
+    }
+  }
+
+  // --- HÀM XỬ LÝ ĐĂNG NHẬP GOOGLE ---
+  void _handleGoogleLogin() async {
+    // 1. Hiển thị loading
+    setState(() => _isLoading = true);
+
+    // 2. Gọi hàm đăng nhập Google từ AuthService (đã viết ở bước trước)
+    // Lưu ý: Hàm này sẽ mở popup Google, lấy token và gửi về backend xác thực
+    bool success = await AuthService.loginWithGoogle();
+
+    // 3. Tắt loading
+    setState(() => _isLoading = false);
+
+    // 4. Xử lý kết quả
+    if (success) {
+      if (!mounted) return;
+
+      // Lấy thông tin user vừa đăng nhập để kiểm tra Role
+      final user = AuthService.getCurrentUser();
+
+      // Chuyển hướng (Thường Google Login là user thường)
+      // Nhưng nếu backend bạn trả về role khác thì vẫn check được
+      final role = (user?['role'] ?? '').toString().toUpperCase();
+
+      if (role == 'RESCUER') {
+        Navigator.pushReplacementNamed(context, '/rescue-dashboard');
+      } else {
+        Navigator.pushReplacementNamed(context, '/user-home');
+      }
+
+    } else {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Đăng nhập Google thất bại hoặc đã hủy'),
+          backgroundColor: Colors.red,
         ),
       );
     }
@@ -73,7 +92,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Giữ nguyên giao diện Light Mode đẹp của bạn
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
@@ -85,161 +103,120 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // --- LOGO SECTION ---
+                  // --- LOGO ---
                   Container(
-                    width: 100,
-                    height: 100,
+                    width: 100, height: 100,
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.2),
-                          blurRadius: 15,
-                          offset: const Offset(0, 5),
-                          spreadRadius: 2,
-                        ),
-                      ],
-                      border: Border.all(
-                          color: _primaryColor.withOpacity(0.1), width: 1),
+                      color: Colors.white, shape: BoxShape.circle,
+                      boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.2), blurRadius: 15, offset: const Offset(0, 5))],
+                      border: Border.all(color: _primaryColor.withOpacity(0.1), width: 1),
                     ),
-                    child: Icon(
-                      Icons.medical_services_outlined,
-                      size: 50,
-                      color: _primaryColor,
-                    ),
+                    child: Icon(Icons.medical_services_outlined, size: 50, color: _primaryColor),
                   ),
                   const SizedBox(height: 24),
-
-                  // --- TEXT SECTION ---
-                  Text(
-                    'CỨU HỘ KHẨN CẤP',
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.grey[900],
-                      letterSpacing: 0.5,
-                    ),
-                  ),
+                  Text('CỨU HỘ KHẨN CẤP', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.grey[900])),
                   const SizedBox(height: 8),
-                  Text(
-                    'Đăng nhập hệ thống phản ứng nhanh',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
+                  Text('Đăng nhập hệ thống phản ứng nhanh', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
                   const SizedBox(height: 40),
 
-                  // --- INPUT SECTION ---
-                  _buildTextField(
-                    controller: _usernameController,
-                    label: 'Email / Tài khoản', // Sửa label cho đúng với identifier
-                    icon: Icons.person_outline,
-                    hint: 'admin@gmail.com',
-                  ),
+                  // --- INPUT FIELDS ---
+                  _buildTextField(controller: _usernameController, label: 'Email / Tài khoản', icon: Icons.person_outline, hint: 'example@gmail.com'),
                   const SizedBox(height: 20),
-                  _buildTextField(
-                    controller: _passwordController,
-                    label: 'Mật khẩu',
-                    icon: Icons.lock_outline,
-                    hint: 'Nhập mật khẩu',
-                    isPassword: true,
-                  ),
+                  _buildTextField(controller: _passwordController, label: 'Mật khẩu', icon: Icons.lock_outline, hint: 'Nhập mật khẩu', isPassword: true),
 
-                  // Quên mật khẩu
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: () {},
-                      child: Text(
-                        'Quên mật khẩu?',
-                        style: TextStyle(
-                          color: _primaryColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      child: Text('Quên mật khẩu?', style: TextStyle(color: _primaryColor, fontWeight: FontWeight.w600)),
                     ),
                   ),
                   const SizedBox(height: 24),
 
-                  // --- BUTTON SECTION ---
+                  // --- LOGIN BUTTON ---
                   SizedBox(
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton(
                       onPressed: _isLoading ? null : _login,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _primaryColor,
-                        foregroundColor: Colors.white,
-                        elevation: 4,
-                        shadowColor: _primaryColor.withOpacity(0.4),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                        backgroundColor: _primaryColor, foregroundColor: Colors.white,
+                        elevation: 4, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: _isLoading
-                          ? const SizedBox(
+                          ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                          : const Text('ĐĂNG NHẬP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // --- GOOGLE LOGIN (MỚI) ---
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: Colors.grey[300])),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text("Hoặc đăng nhập với", style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+                      ),
+                      Expanded(child: Divider(color: Colors.grey[300])),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: OutlinedButton.icon(
+                      onPressed: _handleGoogleLogin,
+                      icon: Image.network(
+                        'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png',
                         height: 24,
-                        width: 24,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2.5,
-                        ),
-                      )
-                          : const Text(
-                        'ĐĂNG NHẬP',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1,
-                        ),
+                      ),
+                      label: const Text("Tiếp tục bằng Google", style: TextStyle(fontSize: 16, color: Colors.black87)),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.grey[300]!),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 30),
 
+                  // --- REGISTER & RESCUER NOTE (MỚI) ---
+                  // 1. Link đăng ký cho người dân
                   _buildRegisterLink(),
 
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 16),
 
-                  // --- DEMO INFO SECTION ---
+                  // 2. Thông báo cho Đội cứu hộ
                   Container(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: Colors.grey[200]!,
-                      ),
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue[100]!),
                     ),
-                    child: Column(
+                    child: Row(
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.info_outline,
-                                color: Colors.grey[600], size: 18),
-                            const SizedBox(width: 8),
-                            Text(
-                              'THÔNG TIN DEMO',
-                              style: TextStyle(
-                                color: Colors.grey[800],
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
+                        Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: RichText(
+                            text: TextSpan(
+                              style: TextStyle(fontSize: 13, color: Colors.blue[900]),
+                              children: const [
+                                TextSpan(text: "Bạn là Đội Cứu Hộ? ", style: TextStyle(fontWeight: FontWeight.bold)),
+                                TextSpan(text: "Vui lòng liên hệ Admin để được cấp tài khoản chuyên dụng."),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
-                        const Divider(height: 24),
-                        // Cập nhật thông tin Demo cho đúng với server của bạn
-                        _buildDemoRow('Admin:', 'admin@gmail.com / ...'),
-                        const SizedBox(height: 8),
-                        _buildDemoRow('User:', 'user@gmail.com / ...'),
                       ],
                     ),
                   ),
+
+                  const SizedBox(height: 20),
                 ],
               ),
             ),
@@ -249,118 +226,36 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildDemoRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: TextStyle(color: Colors.grey[600], fontSize: 13),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: Colors.grey[300]!),
-          ),
-          child: Text(
-            value,
-            style: TextStyle(
-              color: Colors.grey[800],
-              fontWeight: FontWeight.w600,
-              fontFamily: 'monospace',
-              fontSize: 13,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  // ... (Giữ nguyên các hàm _buildTextField và _buildRegisterLink cũ)
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    String? hint,
-    bool isPassword = false,
-  }) {
+  Widget _buildTextField({required TextEditingController controller, required String label, required IconData icon, String? hint, bool isPassword = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.grey[800],
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        Text(label, style: TextStyle(color: Colors.grey[800], fontSize: 14, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         TextField(
-          controller: controller,
-          obscureText: isPassword,
-          style: TextStyle(color: Colors.grey[900]),
-          cursorColor: _primaryColor,
+          controller: controller, obscureText: isPassword,
           decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(color: Colors.grey[400]),
-            prefixIcon: Icon(icon, color: Colors.grey[500]),
-            filled: true,
-            fillColor: Colors.grey[100],
-            contentPadding: const EdgeInsets.symmetric(vertical: 16),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: _primaryColor, width: 1.5),
-            ),
+            hintText: hint, prefixIcon: Icon(icon, color: Colors.grey[500]),
+            filled: true, fillColor: Colors.grey[100],
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
           ),
         ),
       ],
     );
   }
 
-  // Widget Link Đăng ký
   Widget _buildRegisterLink() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(
-          'Chưa có tài khoản? ',
-          style: TextStyle(
-            color: Colors.grey[600],
-            fontSize: 14,
-          ),
-        ),
+        Text('Người dân chưa có tài khoản? ', style: TextStyle(color: Colors.grey[600])),
         GestureDetector(
-          onTap: () {
-            // Chuyển sang màn hình đăng ký
-            Navigator.pushNamed(context, '/register');
-          },
-          child: Text(
-            'Đăng ký ngay',
-            style: TextStyle(
-              color: _primaryColor,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
+          onTap: () => Navigator.pushNamed(context, '/register'),
+          child: Text('Đăng ký miễn phí', style: TextStyle(color: _primaryColor, fontWeight: FontWeight.bold)),
         ),
       ],
     );
-  }
-
-  @override
-  void dispose() {
-    _usernameController.dispose();
-    _passwordController.dispose();
-    super.dispose();
   }
 }
