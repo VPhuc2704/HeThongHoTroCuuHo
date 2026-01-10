@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/auth_service.dart';
+import 'user_profile_screen.dart';
 import 'sos_form_screen.dart';
 
 class UserHomeScreen extends StatefulWidget {
@@ -195,12 +196,14 @@ class _UserHomeScreenState extends State<UserHomeScreen> with TickerProviderStat
             // Chuyển sang màn hình Lịch sử có sẵn của bạn
             Navigator.pushNamed(context, '/user-history');
           } else if (index == 2) {
-            // Chuyển sang màn hình Tài khoản (nếu có)
-            // Navigator.pushNamed(context, '/user-profile');
-            // Hoặc xử lý Logout tại đây nếu muốn
-            setState(() => _currentIndex = index);
-          } else {
-            setState(() => _currentIndex = index);
+            // Chuyển sang màn hình Tài khoản
+            Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const UserProfileScreen())
+            ).then((_) {
+              // Khi quay lại từ trang Profile, reset tab về 0 (Trang chủ)
+              setState(() => _currentIndex = 0);
+            });
           }
         },
         destinations: const [

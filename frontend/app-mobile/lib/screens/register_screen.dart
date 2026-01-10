@@ -105,9 +105,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: 16),
                 _buildTextField(
                   controller: _emailController,
-                  label: 'Email',
+                  label: 'Số điện thoại',
                   icon: Icons.email_outlined,
-                  hint: 'email@example.com',
+                  hint: '0999999999',
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(

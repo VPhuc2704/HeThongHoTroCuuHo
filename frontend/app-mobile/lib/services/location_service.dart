@@ -5,8 +5,6 @@ import 'package:geolocator/geolocator.dart';
 
 class LocationService {
 
-  /// Hàm lấy vị trí chuyên dụng cho Cứu Hộ
-  /// Trả về Position nếu thành công, ném ra lỗi nếu thất bại.
   static Future<Position> getRescueLocation() async {
     bool serviceEnabled;
     LocationPermission permission;
@@ -14,7 +12,6 @@ class LocationService {
     // 1. Kiểm tra GPS có bật không
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      // Tùy chọn: Có thể gọi Geolocator.openLocationSettings(); để mở cài đặt
       return Future.error('GPS đang bị tắt. Vui lòng bật GPS.');
     }
 
@@ -39,13 +36,13 @@ class LocationService {
 
     if (kIsWeb) {
       locationSettings = const LocationSettings(
-        accuracy: LocationAccuracy.medium, // Web dùng Medium cho nhanh
-        timeLimit: Duration(seconds: 10), // Web cho chờ lâu hơn chút
+        accuracy: LocationAccuracy.medium,
+        timeLimit: Duration(seconds: 10),
       );
     } else {
       locationSettings = const LocationSettings(
-        accuracy: LocationAccuracy.high, // Mobile bắt buộc High
-        distanceFilter: 10, // Chỉ cập nhật nếu di chuyển > 10m (nếu dùng stream)
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
         timeLimit: Duration(seconds: 20), // Mobile chỉ chờ 5s, lâu quá thì báo lỗi để user biết
       );
     }
