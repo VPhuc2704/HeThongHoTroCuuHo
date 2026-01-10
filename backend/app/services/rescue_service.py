@@ -108,3 +108,28 @@ class RescueService:
             return True
         except RescueTeam.DoesNotExist:
             raise ResourceNotFound("Đội cứu hộ không tồn tại")
+        
+    def get_my_team(account) -> RescueTeamOut:
+        """
+        Lấy thông tin đội cứu hộ gắn với tài khoản đang đăng nhập
+        """
+        sql = """
+            SELECT id, name , leader_name, contact_phone, hotline, 
+                   team_type, address, primary_area, status, created_at,
+                   ST_X(location) AS longitude, 
+                   ST_Y(location) AS latitude
+            FROM rescue_teams
+            WHERE account_id = %s;
+        """ 
+        
+        with connection.cursor() as cursor:
+            cursor.execute(sql, [account.id])
+            row = cursor.fetchone()
+            
+            if not row:
+                raise ResourceNotFound("Bạn chưa đăng ký thông tin đội cứu hộ nào.")
+            
+            columns = [col[0] for col in cursor.description]
+            row_dict = dict(zip(columns, row))
+
+            return RescueTeamOut(**row_dict)

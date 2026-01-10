@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/assign_service.dart';
 import '../models/assignment.dart';
 import '../services/auth_service.dart';
+import 'rescuer_profile_screen.dart';
 
 class RescuerDashboardScreen extends StatefulWidget {
   const RescuerDashboardScreen({super.key});
@@ -258,8 +259,14 @@ class _RescuerDashboardScreenState extends State<RescuerDashboardScreen> {
           // AVATAR & INFO (Update Info)
           InkWell(
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Tính năng cập nhật thông tin đang phát triển")));
+              // --- SỬA ĐỔI TẠI ĐÂY ---
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const RescuerProfileScreen()),
+              ).then((_) {
+                // Load lại data khi quay về (đề phòng user đổi tên)
+                _loadAssignments();
+              });
             },
             child: Row(
               children: [

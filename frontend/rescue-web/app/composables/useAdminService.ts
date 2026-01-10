@@ -30,7 +30,14 @@ export const useAdminService = () => {
 
     // Khóa/Mở khóa tài khoản
     const toggleActive = async (id: number, isActive: boolean) => {
-        return await apiFetch(`/api/admin/accounts/${id}/active`, {
+        return await apiFetch(`/api/admin/account/lock/${id}`, {
+            method: 'PATCH',
+            body: { is_active: isActive }
+        });
+    };
+
+    const toggleUnActive = async (id: number, isActive: boolean) => {
+        return await apiFetch(`/api/admin/account/unlock/${id}`, {
             method: 'PATCH',
             body: { is_active: isActive }
         });
@@ -63,6 +70,7 @@ export const useAdminService = () => {
         getAccounts,
         createAccount,
         toggleActive,
+        toggleUnActive,
         getTeams,
         updateTeam,
         deleteTeam

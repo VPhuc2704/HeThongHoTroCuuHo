@@ -5,7 +5,7 @@ import type { Account } from '~/types/account';
 
 export function useAccountList() {
   // Giả sử useAdminService đã được auto-import hoặc import ở nơi khác
-  const { getAccounts, toggleActive } = useAdminService();
+  const { getAccounts, toggleActive, toggleUnActive } = useAdminService();
 
   const loading = ref(false);
   const accounts = ref<Account[]>([]);
@@ -57,33 +57,49 @@ export function useAccountList() {
     fetchData(true); // Flag true để biết là đang load thêm
   };
 
-  const handleToggleStatus = async (row: Account) => {
-    const action = row.is_active ? 'Khóa' : 'Kích hoạt lại';
-    try {
-      await ElMessageBox.confirm(
-        `Bạn có chắc muốn <strong>${action}</strong> tài khoản <span class="text-blue-600">${row.email}</span>?`,
-        'Xác nhận',
-        {
-          dangerouslyUseHTMLString: true,
-          type: row.is_active ? 'warning' : 'info',
-          confirmButtonText: 'Đồng ý',
-          cancelButtonText: 'Hủy'
-        }
-      );
+  const handleToggleStatus = async (row: any) => {
+      const isCurrentlyActive = row.is_active;
+      const actionName = isCurrentlyActive ? 'Khóa' : 'Kích hoạt lại';
+      
+      try {
+          await ElMessageBox.confirm(
+              `Bạn có chắc muốn <strong>${actionName}</strong> tài khoản <span class="text-blue-600">${row.email}</span>?`,
+              'Xác nhận thay đổi trạng thái',
+              {
+                  dangerouslyUseHTMLString: true,
+                  type: isCurrentlyActive ? 'warning' : 'info',
+                  confirmButtonText: 'Đồng ý',
+                  cancelButtonText: 'Hủy',
+                  closeOnClickModal: false
+              }
+          );
 
-      // Gọi service
-      await toggleActive(row.id, !row.is_active);
+          // GỌI API DỰA TRÊN TRẠNG THÁI HIỆN TẠI
+          if (isCurrentlyActive) {
+              // Đang Active -> Gọi API Lock
+              // Lưu ý: row.id cần đúng kiểu dữ liệu (number/string) như Service yêu cầu
+              await toggleActive(row.id, false); 
+          } else {
+              // Đang Locked -> Gọi API Unlock
+              await toggleUnActive(row.id, true);
+          }
 
-      // Cập nhật UI ngay lập tức (Optimistic UI)
-      row.is_active = !row.is_active;
-      ElMessage.success(`Đã ${action} thành công`);
-    } catch (e) {
-      // User hủy hoặc lỗi API thì không làm gì hoặc log lỗi
-      if (e !== 'cancel') {
-        console.error(e);
+          // Cập nhật UI ngay lập tức (Optimistic UI)
+          row.is_active = !isCurrentlyActive;
+          
+          ElMessage.success({
+              message: `Đã ${actionName} tài khoản thành công`,
+              plain: true
+          });
+
+      } catch (e) {
+          if (e !== 'cancel') {
+              console.error(e);
+              ElMessage.error('Có lỗi xảy ra, vui lòng thử lại.');
+          }
       }
-    }
   };
+
 
   return {
     loading,
@@ -93,6 +109,6 @@ export function useAccountList() {
     fetchData,
     handleSearch,
     handleLoadMore,
-    handleToggleStatus
+    handleToggleStatus,
   };
 }

@@ -23,6 +23,19 @@ def list_teams(request):
         data=data
     )
 
+@router.get("/me", response=ApiResponse[RescueTeamOut])
+def get_my_team_info(request):
+    """
+    API cho đội cứu hộ tự lấy thông tin của mình
+    """
+    data = RescueService.get_my_team(request.auth)
+    return ApiResponse(
+        success=True,
+        code=200,
+        message="Lấy thông tin đội thành công",
+        data=data
+    )
+
 @router.patch("/{team_id}", response=ApiResponse[RescueTeamOut])
 def update_rescue_team(request, team_id: str, payload: RescueTeamUpdate):
     update_rescue_team = RescueService.update_rescue_team(request.auth, team_id, payload)

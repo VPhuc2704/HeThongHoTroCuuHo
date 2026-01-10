@@ -23,7 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (identifier.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng nhập Email và Mật khẩu'), backgroundColor: Colors.orange),
+        const SnackBar(content: Text('Vui lòng nhập SDT và Mật khẩu'), backgroundColor: Colors.orange),
       );
       return;
     }
@@ -120,7 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 40),
 
                   // --- INPUT FIELDS ---
-                  _buildTextField(controller: _usernameController, label: 'Email / Tài khoản', icon: Icons.person_outline, hint: 'example@gmail.com'),
+                  _buildTextField(controller: _usernameController, label: 'SĐT / Tài khoản', icon: Icons.person_outline, hint: '0999999999'),
                   const SizedBox(height: 20),
                   _buildTextField(controller: _passwordController, label: 'Mật khẩu', icon: Icons.lock_outline, hint: 'Nhập mật khẩu', isPassword: true),
 
