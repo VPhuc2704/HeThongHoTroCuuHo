@@ -39,7 +39,7 @@ def list_accounts(request, limit: int = 20, cursor: str = None):
     return account_service.get_list_accounts(limit=limit, cursor=cursor)
 
 
-@router.post("/admin/account/{account_id}/lock",
+@router.patch("/admin/account/lock/{account_id}",
             auth=auth_bearer,
             response={200: ApiResponse}
 )
@@ -54,7 +54,7 @@ def lock_account(request, account_id: str):
         "details": None
     }
 
-@router.post("/admin/account/{account_id}/unlock",
+@router.patch("/admin/account/unlock/{account_id}",
             auth=auth_bearer,
             response={200: ApiResponse}
 )

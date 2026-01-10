@@ -1,105 +1,40 @@
-<!-- <script setup lang="ts">
-import { WarningFilled, UserFilled, Finished, LocationFilled, ArrowRight } from '@element-plus/icons-vue';
-import MapWidget from '~/components/MapWidget.vue';
-import StatCard from '~/components/StatCard.vue';
-import { useRealtimeMap } from '~/composables/useRealtimeMap';
-
-definePageMeta({ layout: 'admin' });
-
-const { points, socketStatus, fetchPoints } = useRealtimeMap();
-
-const statData = [
-  { title: 'Sự cố đang chờ', value: 12, unit: 'vụ', icon: WarningFilled, color: 'red' as const, change: '+15%', percent: 60 },
-  { title: 'Lực lượng sẵn sàng', value: 5, unit: 'đơn vị', icon: UserFilled, color: 'green' as const, change: '-5%', percent: 50 },
-  { title: 'Đã xử lý hôm nay', value: 28, unit: 'vụ', icon: Finished, color: 'blue' as const, change: '+2%', percent: 28 },
-];
-</script>
-
-<template>
-  <div class="p-0">
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-      <StatCard 
-        v-for="(stat, idx) in statData" 
-        :key="idx" 
-        v-bind="stat" 
-      />
-
-      <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg flex flex-col justify-between">
-        <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Truy Cập Nhanh</h3>
-        <NuxtLink to="/admin/incidents" class="flex items-center justify-between px-3 py-2 bg-slate-700/30 rounded-lg hover:bg-slate-700 transition-colors group">
-          <span class="text-slate-300 text-sm font-medium group-hover:text-white">Sự cố đang chờ</span>
-          <el-icon class="text-red-500 text-base group-hover:scale-110 transition-transform"><WarningFilled /></el-icon>
-        </NuxtLink>
-        <NuxtLink to="/admin/users" class="mt-1 flex items-center justify-between px-3 py-2 bg-slate-700/30 rounded-lg hover:bg-slate-700 transition-colors group">
-          <span class="text-slate-300 text-sm font-medium group-hover:text-white">Quản lý Cán bộ</span>
-          <el-icon class="text-blue-500 text-base group-hover:scale-110 transition-transform"><UserFilled /></el-icon>
-        </NuxtLink>
-      </div>
-    </div>
-    
-    <div class="grid grid-cols-1">
-      <div class="bg-slate-900 min-h-[70vh] rounded-xl shadow-2xl relative overflow-hidden flex flex-col">
-        <div class="bg-slate-800 p-3 flex justify-between items-center border-b border-red-500/50">
-          <h3 class="text-sm font-semibold text-white uppercase tracking-wider flex items-center gap-2">
-            <el-icon class="text-red-500"><LocationFilled /></el-icon>
-            Giám sát Trực tuyến
-          </h3>
-          <div class="flex items-center gap-3">
-            <span class="text-[10px] text-slate-400 font-mono flex items-center gap-1">
-              <span class="w-2 h-2 rounded-full" :class="socketStatus === 'OPEN' ? 'bg-green-500 animate-pulse' : 'bg-red-500'"></span>
-              {{ socketStatus === 'OPEN' ? 'LIVE' : 'OFFLINE' }}
-            </span>
-            <NuxtLink to="/admin/map" class="text-xs text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1">
-              Xem Bản đồ Lớn <el-icon><ArrowRight /></el-icon>
-            </NuxtLink>
-          </div>
-        </div>
-        
-        <div class="flex-1 relative bg-slate-800">
-          <ClientOnly>
-            <MapWidget 
-              :points="points" 
-              @fetch-new-data="fetchPoints" 
-            />
-            <template #fallback>
-              <div class="w-full h-full flex items-center justify-center text-slate-500 animate-pulse">
-                Loading Map Infrastructure...
-              </div>
-            </template>
-          </ClientOnly>
-        </div>
-      </div>
-    </div>
-  </div>
-</template> -->
-
-
 <script setup lang="ts">
+import { ref, onMounted } from 'vue';
 import { 
   WarningFilled, UserFilled, Finished, ArrowRight, Timer, View,
-  Bell, ChatDotRound, CircleCheckFilled, InfoFilled, WarnTriangleFilled
+  Bell, ChatDotRound, CircleCheckFilled, InfoFilled, WarnTriangleFilled,
+  Loading
 } from '@element-plus/icons-vue';
-import StatCard from '~/components/StatCard.vue'; // Đảm bảo bạn đã có component này
+import StatCard from '~/components/StatCard.vue';
+import { useRescueService } from '~/composables/useRescueService';
 
 definePageMeta({ layout: 'admin' });
 
-// --- DATA 1: THỐNG KÊ TỔNG QUAN (Stats Cards) ---
+// --- 1. CONFIG & SERVICE ---
+const { getAll } = useRescueService();
+const isLoading = ref(false);
+
+// Interface cho dữ liệu hiển thị trên UI
+interface IncidentUI {
+  id: string;
+  code: string;
+  name: string;
+  phone: string;
+  address: string;
+  status: string;
+  time: string; // Hiển thị dạng "Vừa xong"
+}
+
+// --- 2. STATE ---
+const recentIncidents = ref<IncidentUI[]>([]);
+
+// --- 3. MOCK DATA (Giữ nguyên cho các phần chưa có API) ---
 const statData = [
   { title: 'Sự cố đang chờ', value: 12, unit: 'vụ', icon: WarningFilled, color: 'red' as const, change: '+15%', percent: 60 },
   { title: 'Lực lượng sẵn sàng', value: 5, unit: 'đơn vị', icon: UserFilled, color: 'green' as const, change: '-5%', percent: 50 },
   { title: 'Đã xử lý hôm nay', value: 28, unit: 'vụ', icon: Finished, color: 'blue' as const, change: '+2%', percent: 28 },
 ];
 
-// --- DATA 2: BẢNG SỰ CỐ GẦN ĐÂY (Recent Incidents Table) ---
-const recentIncidents = [
-  { id: 1, code: 'SC-2305', name: 'Nguyễn Văn A', phone: '0901234567', address: '123 Lê Lợi, Q1, HCM', status: 'PENDING', time: 'Vừa xong' },
-  { id: 2, code: 'SC-2304', name: 'Trần Thị B', phone: '0912345678', address: 'Chung cư ABC, Q7', status: 'PROCESSING', time: '30 phút trước' },
-  { id: 3, code: 'SC-2303', name: 'Lê Văn C', phone: '0987654321', address: 'Khu dân cư XYZ, Bình Chánh', status: 'PENDING', time: '45 phút trước' },
-  { id: 4, code: 'SC-2302', name: 'Phạm Thị D', phone: '0999888777', address: '321 Điện Biên Phủ, BT', status: 'DONE', time: '1 giờ trước' },
-  { id: 5, code: 'SC-2301', name: 'Hoàng Văn E', phone: '0909090909', address: 'Cầu Sài Gòn', status: 'CANCELLED', time: '2 giờ trước' },
-];
-
-// --- DATA 3: NHẬT KÝ HOẠT ĐỘNG (Activity Timeline Log) ---
 const activityLogs = [
   { id: 1, type: 'alert', message: 'Nhận tín hiệu SOS mới từ Q.Bình Thạnh', time: 'Vừa xong', icon: Bell, color: 'text-red-500 bg-red-500/10 border-red-500/20' },
   { id: 2, type: 'info', message: 'Xe chữa cháy đội 1 đang tiếp cận hiện trường', time: '2 phút trước', icon: InfoFilled, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
@@ -108,21 +43,74 @@ const activityLogs = [
   { id: 5, type: 'system', message: 'Hệ thống tự động sao lưu dữ liệu', time: '30 phút trước', icon: WarnTriangleFilled, color: 'text-slate-400 bg-slate-500/10 border-slate-500/20' },
 ];
 
-// Helpers
+// --- 4. HELPERS ---
+
+// Hàm tính thời gian tương đối
+const timeAgo = (dateString: string | undefined) => {
+  if (!dateString) return 'N/A';
+  const now = new Date();
+  const past = new Date(dateString);
+  const diffInSeconds = Math.floor((now.getTime() - past.getTime()) / 1000);
+
+  if (diffInSeconds < 60) return 'Vừa xong';
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} phút trước`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} giờ trước`;
+  return `${Math.floor(diffInSeconds / 86400)} ngày trước`;
+};
+
+// Hàm lấy màu theo trạng thái
 const getStatusColor = (status: string) => {
     switch(status) {
-        case 'PENDING': return 'text-red-400 bg-red-400/10 border-red-400/20';
-        case 'PROCESSING': return 'text-blue-400 bg-blue-400/10 border-blue-400/20';
-        case 'DONE': return 'text-green-400 bg-green-400/10 border-green-400/20';
-        case 'CANCELLED': return 'text-slate-400 bg-slate-400/10 border-slate-400/20';
+        case 'Chờ xử lý': return 'text-red-400 bg-red-400/10 border-red-400/20';
+        case 'Đang thực hiện': return 'text-blue-400 bg-blue-400/10 border-blue-400/20';
+        case 'Hoàn thành': return 'text-green-400 bg-green-400/10 border-green-400/20';
+        case 'Đã phân công': return 'text-slate-400 bg-slate-400/10 border-slate-400/20';
         default: return 'text-slate-400 bg-slate-400/10 border-slate-400/20';
     }
 };
 
+// Hàm lấy text hiển thị theo trạng thái
 const getStatusText = (status: string) => {
-    const map: Record<string, string> = { 'PENDING': 'Đang chờ', 'PROCESSING': 'Đang xử lý', 'DONE': 'Hoàn thành', 'CANCELLED': 'Đã hủy' };
+    const map: Record<string, string> = { 
+      'PENDING': 'Đang chờ', 
+      'PROCESSING': 'Đang xử lý', 
+      'DONE': 'Hoàn thành', 
+      'CANCELLED': 'Đã hủy' 
+    };
     return map[status] || status;
 }
+
+// --- 5. DATA FETCHING ---
+const fetchRecentIncidents = async () => {
+  isLoading.value = true;
+  try {
+    // Gọi API lấy dữ liệu thực tế
+    // Lưu ý: Đảm bảo backend trả về danh sách có các trường tương ứng hoặc chỉnh sửa map() bên dưới
+    const response = await getAll({page: 1, page_size: 10 }); 
+    
+    const rawData = Array.isArray(response) ? response : (response as any).items || [];
+
+    recentIncidents.value = rawData.slice(0, 10).map((item: any) => ({
+      id: item.id,
+      code: item.code,
+      name: item.name || 'Không rõ',
+      phone: item.reporter_phone || '',
+      address: item.address || 'Chưa có định vị',
+      status: item.status || 'PENDING',
+      time: timeAgo(item.created_at)
+    }));
+
+  } catch (error) {
+    console.error('Lỗi khi tải danh sách sự cố:', error);
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+// Gọi API khi component được mount
+onMounted(() => {
+  fetchRecentIncidents();
+});
 </script>
 
 <template>
@@ -152,11 +140,11 @@ const getStatusText = (status: string) => {
                <el-icon class="text-red-500"><Timer /></el-icon> Tiếp nhận gần đây
              </h3>
              <NuxtLink to="/admin/incidents" class="text-xs text-blue-400 hover:underline flex items-center gap-1">
-                Xem tất cả <el-icon><ArrowRight /></el-icon>
+               Xem tất cả <el-icon><ArrowRight /></el-icon>
              </NuxtLink>
           </div>
           
-          <div class="overflow-x-auto flex-1">
+          <div class="overflow-x-auto flex-1 relative min-h-[300px]">
             <table class="w-full text-left border-collapse">
                 <thead>
                     <tr class="text-slate-400 text-xs border-b border-slate-700 bg-slate-900/30">
@@ -167,18 +155,47 @@ const getStatusText = (status: string) => {
                     </tr>
                 </thead>
                 <tbody class="text-sm divide-y divide-slate-700/50">
-                    <tr v-for="item in recentIncidents" :key="item.id" class="hover:bg-slate-700/30 transition-colors group">
-                        <td class="p-4 font-mono text-blue-400 font-semibold group-hover:text-blue-300">#{{ item.code }}</td>
-                        <td class="p-4">
-                            <div class="text-slate-200 font-medium">{{ item.name }}</div>
-                            <div class="text-xs text-slate-500 truncate max-w-[200px]" :title="item.address">{{ item.address }}</div>
+                    
+                    <tr v-if="isLoading">
+                        <td colspan="4" class="p-10 text-center">
+                            <div class="flex flex-col items-center justify-center text-slate-500 gap-2">
+                                <el-icon class="is-loading text-2xl text-blue-500"><Loading /></el-icon>
+                                <span class="text-xs animate-pulse">Đang cập nhật dữ liệu...</span>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <tr v-else-if="!isLoading && recentIncidents.length === 0">
+                        <td colspan="4" class="p-10 text-center text-slate-500 text-xs">
+                            <div class="flex flex-col items-center gap-2">
+                                <el-icon class="text-2xl"><InfoFilled /></el-icon>
+                                Chưa có yêu cầu cứu hộ nào gần đây.
+                            </div>
+                        </td>
+                    </tr>
+
+                    <tr v-else v-for="item in recentIncidents" :key="item.id" class="hover:bg-slate-700/30 transition-colors group">
+                        <td class="p-4 font-mono text-blue-400 font-semibold group-hover:text-blue-300 whitespace-nowrap">
+                            #{{ item.code }}
                         </td>
                         <td class="p-4">
-                            <span class="px-2.5 py-1 rounded-md text-[10px] font-bold border uppercase tracking-wider" :class="getStatusColor(item.status)">
+                            <div class="text-slate-200 font-medium">{{ item.name }}</div>
+                            <div class="text-xs text-slate-500 truncate max-w-[200px]" :title="item.address">
+                                {{ item.address }}
+                            </div>
+                            <div v-if="item.phone" class="text-[10px] text-slate-600 font-mono mt-0.5">
+                                {{ item.phone }}
+                            </div>
+                        </td>
+                        <td class="p-4">
+                            <span class="px-2.5 py-1 rounded-md text-[10px] font-bold border uppercase tracking-wider whitespace-nowrap" 
+                                  :class="getStatusColor(item.status)">
                                 {{ getStatusText(item.status) }}
                             </span>
                         </td>
-                        <td class="p-4 text-right text-slate-400 text-xs font-mono">{{ item.time }}</td>
+                        <td class="p-4 text-right text-slate-400 text-xs font-mono whitespace-nowrap">
+                            {{ item.time }}
+                        </td>
                     </tr>
                 </tbody>
             </table>
@@ -260,7 +277,7 @@ const getStatusText = (status: string) => {
 </template>
 
 <style scoped>
-/* CSS cho thanh cuộn nhỏ gọn trong Widget Log */
+/* CSS cho thanh cuộn nhỏ gọn */
 .scrollbar-thin::-webkit-scrollbar {
   width: 4px;
 }
